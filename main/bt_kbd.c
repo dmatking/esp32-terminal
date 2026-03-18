@@ -254,17 +254,9 @@ static void hidh_cb(void *arg, esp_event_base_t base, int32_t id, void *data)
         xSemaphoreGive(s_open_done_sem);
         break;
     case ESP_HIDH_INPUT_EVENT:
-        ESP_LOGI(TAG, "HID input: usage=%d map=%d id=%d len=%d data=%02x %02x %02x %02x %02x %02x %02x %02x",
+        ESP_LOGD(TAG, "HID input: usage=%d map=%d id=%d len=%d",
                  p->input.usage, p->input.map_index, p->input.report_id,
-                 p->input.length,
-                 p->input.length > 0 ? p->input.data[0] : 0,
-                 p->input.length > 1 ? p->input.data[1] : 0,
-                 p->input.length > 2 ? p->input.data[2] : 0,
-                 p->input.length > 3 ? p->input.data[3] : 0,
-                 p->input.length > 4 ? p->input.data[4] : 0,
-                 p->input.length > 5 ? p->input.data[5] : 0,
-                 p->input.length > 6 ? p->input.data[6] : 0,
-                 p->input.length > 7 ? p->input.data[7] : 0);
+                 p->input.length);
         if (p->input.usage == ESP_HID_USAGE_KEYBOARD)
             translate_report(p->input.data, p->input.length);
         break;

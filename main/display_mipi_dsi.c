@@ -48,31 +48,34 @@ static const char *TAG = "mipi_dsi";
 // RGB888 bytes per pixel
 #define BPP     3
 
-// Phosphor green in RGB888
-#define FG_R  0x00
-#define FG_G  0xFF
-#define FG_B  0x00
+// Default foreground (phosphor green)
+#define DEFAULT_FG ((rgb_t){ 0x00, 0xFF, 0x00 })
+#define DEFAULT_BG ((rgb_t){ 0x00, 0x00, 0x00 })
 
 #define FB_SIZE (DSI_H_RES * DSI_V_RES * BPP)
 
 // Render one character into the framebuffer at pixel position (px, py)
-static void render_char(uint8_t *fb, int px, int py, char c)
+static void render_cell(uint8_t *fb, int px, int py, display_cell_t *cell)
 {
+    char c = cell->ch;
     if (c < 32 || c > 126) c = ' ';
     const uint8_t (*glyph)[2] = terminus_24_data[c - 32];
+
+    uint8_t fg_b = cell->fg.b, fg_g = cell->fg.g, fg_r = cell->fg.r;
+    uint8_t bg_b = cell->bg.b, bg_g = cell->bg.g, bg_r = cell->bg.r;
 
     for (int y = 0; y < CHAR_H; y++) {
         uint8_t *row = fb + ((py + y) * DSI_H_RES + px) * BPP;
         uint16_t bits = ((uint16_t)glyph[y][0] << 8) | glyph[y][1];
         for (int x = 0; x < CHAR_W; x++) {
             if (bits & (0x8000 >> x)) {
-                row[x * BPP + 0] = FG_B;
-                row[x * BPP + 1] = FG_G;
-                row[x * BPP + 2] = FG_R;
+                row[x * BPP + 0] = fg_b;
+                row[x * BPP + 1] = fg_g;
+                row[x * BPP + 2] = fg_r;
             } else {
-                row[x * BPP + 0] = 0;
-                row[x * BPP + 1] = 0;
-                row[x * BPP + 2] = 0;
+                row[x * BPP + 0] = bg_b;
+                row[x * BPP + 1] = bg_g;
+                row[x * BPP + 2] = bg_r;
             }
         }
     }
@@ -83,7 +86,9 @@ static void render_char(uint8_t *fb, int px, int py, char c)
 static void dsi_clear(display_t *d)
 {
     mipi_dsi_priv_t *priv = d->priv;
-    memset(priv->cells, ' ', sizeof(priv->cells));
+    for (int r = 0; r < ROWS; r++)
+        for (int c = 0; c < COLS; c++)
+            priv->cells[r][c] = (display_cell_t){ ' ', DEFAULT_FG, DEFAULT_BG };
     memset(priv->dirty, 0, sizeof(priv->dirty));
     priv->cleared = true;
 }
@@ -94,7 +99,7 @@ static esp_err_t dsi_flush(display_t *d)
 
     if (priv->cleared) {
         // Don't memset the live framebuffer (causes flicker).
-        // Instead mark all rows dirty so render_char clears each cell.
+        // Instead mark all rows dirty so render_cell clears each cell.
         priv->cleared = false;
         for (int i = 0; i < (ROWS + 63) / 64; i++)
             priv->dirty[i] = ~0ULL;
@@ -108,7 +113,7 @@ static esp_err_t dsi_flush(display_t *d)
 
         int py = MARGIN_Y + row * CHAR_H;
         for (int col = 0; col < COLS; col++)
-            render_char(priv->framebuf, MARGIN_X + col * CHAR_W, py, priv->cells[row][col]);
+            render_cell(priv->framebuf, MARGIN_X + col * CHAR_W, py, &priv->cells[row][col]);
 
         priv->dirty[word] &= ~bit;
     }
@@ -129,7 +134,15 @@ static void dsi_pixel(display_t *d, int x, int y, bool on)
     if (x < 0 || x >= DSI_H_RES || y < 0 || y >= DSI_V_RES) return;
     uint8_t *p = priv->framebuf + (y * DSI_H_RES + x) * BPP;
     if (on) {
-        p[0] = FG_B; p[1] = FG_G; p[2] = FG_R;
+        // Use the cell's fg color at this position
+        int col = (x - MARGIN_X) / CHAR_W;
+        int row = (y - MARGIN_Y) / CHAR_H;
+        if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+            rgb_t fg = priv->cells[row][col].fg;
+            p[0] = fg.b; p[1] = fg.g; p[2] = fg.r;
+        } else {
+            p[0] = 0x00; p[1] = 0xFF; p[2] = 0x00;
+        }
     } else {
         p[0] = 0; p[1] = 0; p[2] = 0;
     }
@@ -145,7 +158,7 @@ static int dsi_putc(display_t *d, int x, int y, char c)
     int col = x / CHAR_W;
     int row = y / CHAR_H;
     if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
-        priv->cells[row][col] = c;
+        priv->cells[row][col] = (display_cell_t){ c, DEFAULT_FG, DEFAULT_BG };
         priv->dirty[row / 64] |= 1ULL << (row % 64);
     }
     return CHAR_W;
@@ -157,8 +170,20 @@ static void dsi_puts(display_t *d, int x, int y, const char *s)
         x += dsi_putc(d, x, y, *s++);
 }
 
+static int dsi_putc_color(display_t *d, int x, int y, char c, rgb_t fg, rgb_t bg)
+{
+    mipi_dsi_priv_t *priv = d->priv;
+    int col = x / CHAR_W;
+    int row = y / CHAR_H;
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+        priv->cells[row][col] = (display_cell_t){ c, fg, bg };
+        priv->dirty[row / 64] |= 1ULL << (row % 64);
+    }
+    return CHAR_W;
+}
+
 static const display_ops_t mipi_dsi_ops = {
-    dsi_clear, dsi_flush, dsi_pixel, dsi_putc, dsi_puts
+    dsi_clear, dsi_flush, dsi_pixel, dsi_putc, dsi_puts, dsi_putc_color
 };
 
 // -- Public init --------------------------------------------------------------
