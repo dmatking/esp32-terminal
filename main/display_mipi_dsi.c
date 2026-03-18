@@ -35,11 +35,15 @@ static const char *TAG = "mipi_dsi";
 #define DSI_BK_LIGHT_GPIO   26
 #define DSI_RST_GPIO        27
 
+// Inset from display edges (bezel clearance)
+#define MARGIN_X  10
+#define MARGIN_Y  10
+
 // Character cell: 2x scaled 5x7 font = 10x14, plus 2px gap = 12x16
 #define CHAR_W  12
 #define CHAR_H  16
-#define COLS    (DSI_H_RES / CHAR_W)   // 85
-#define ROWS    (DSI_V_RES / CHAR_H)   // 37
+#define COLS    ((DSI_H_RES - 2 * MARGIN_X) / CHAR_W)   // 83
+#define ROWS    ((DSI_V_RES - 2 * MARGIN_Y) / CHAR_H)   // 36
 
 // RGB888 bytes per pixel
 #define BPP     3
@@ -114,9 +118,9 @@ static esp_err_t dsi_flush(display_t *d)
         uint64_t bit = 1ULL << (row % 64);
         if (!(priv->dirty[word] & bit)) continue;
 
-        int py = row * CHAR_H;
+        int py = MARGIN_Y + row * CHAR_H;
         for (int col = 0; col < COLS; col++)
-            render_char(priv->framebuf, col * CHAR_W, py, priv->cells[row][col]);
+            render_char(priv->framebuf, MARGIN_X + col * CHAR_W, py, priv->cells[row][col]);
 
         priv->dirty[word] &= ~bit;
     }
@@ -141,8 +145,8 @@ static void dsi_pixel(display_t *d, int x, int y, bool on)
     } else {
         p[0] = 0; p[1] = 0; p[2] = 0;
     }
-    int row = y / CHAR_H;
-    if (row < ROWS) {
+    int row = (y - MARGIN_Y) / CHAR_H;
+    if (row >= 0 && row < ROWS) {
         priv->dirty[row / 64] |= 1ULL << (row % 64);
     }
 }
@@ -263,7 +267,7 @@ esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv)
     d->ops  = &mipi_dsi_ops;
     d->priv = priv;
     d->geom = (display_geom_t){
-        DSI_H_RES, DSI_V_RES, COLS, ROWS, CHAR_W, CHAR_H
+        DSI_H_RES, DSI_V_RES, COLS, ROWS, CHAR_W, CHAR_H, MARGIN_X, MARGIN_Y
     };
 
     // Clear screen

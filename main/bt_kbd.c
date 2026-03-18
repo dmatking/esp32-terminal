@@ -157,7 +157,7 @@ static void connection_watchdog_task(void *arg)
         s_reconnecting = true;
 
         // Brief delay to let disconnect settle
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(500));
 
         // Show status on display
         if (s_display) {
@@ -178,8 +178,8 @@ static void connection_watchdog_task(void *arg)
                     break;
                 }
                 ble_gap_conn_cancel();
-                ESP_LOGW(TAG, "Reconnect attempt %d failed, retrying in 3s...", attempt);
-                vTaskDelay(pdMS_TO_TICKS(3000));
+                ESP_LOGW(TAG, "Reconnect attempt %d failed, retrying...", attempt);
+                vTaskDelay(pdMS_TO_TICKS(1000));
             }
         } else {
             // Fallback: full bonded reconnect (first boot, no device yet)
@@ -398,8 +398,8 @@ static bool try_bonded_reconnect(bool show_on_display)
     xSemaphoreTake(s_open_done_sem, 0);
     esp_hidh_dev_open(value.peer_addr.val, ESP_HID_TRANSPORT_BLE, addr_type);
 
-    // Wait for OPEN_EVENT (success or fail) -- NimBLE connection timeout is ~30s
-    xSemaphoreTake(s_open_done_sem, pdMS_TO_TICKS(35000));
+    // Wait for OPEN_EVENT (success or fail) -- NimBLE connection timeout is ~10s
+    xSemaphoreTake(s_open_done_sem, pdMS_TO_TICKS(15000));
 
     // Check if we actually connected
     if (xSemaphoreTake(s_connected_sem, 0) == pdTRUE) {
@@ -457,15 +457,20 @@ static void scan_task(void *arg)
     // If boot button was held at startup, bonds were already cleared in bt_kbd_init
     bool force_repair = s_force_repair;
 
-    // Try reconnecting to a previously bonded keyboard
-    if (!force_repair && try_bonded_reconnect(true)) {
-        // Start watchdog for future disconnects, then exit scan task
-        xTaskCreate(connection_watchdog_task, "bt_watch", 16384, NULL, 2, NULL);
-        vTaskDelete(NULL);
-        return;
+    // Retry bonded reconnect until it works (or force re-pair)
+    if (!force_repair) {
+        for (int attempt = 1; ; attempt++) {
+            ESP_LOGI(TAG, "Bonded reconnect attempt %d", attempt);
+            if (try_bonded_reconnect(attempt == 1)) {
+                xTaskCreate(connection_watchdog_task, "bt_watch", 16384, NULL, 2, NULL);
+                vTaskDelete(NULL);
+                return;
+            }
+            ble_gap_conn_cancel();
+            ESP_LOGW(TAG, "Bonded reconnect attempt %d failed, retrying...", attempt);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
     }
-    if (!force_repair)
-        ESP_LOGI(TAG, "Bonded reconnect failed, starting fresh pairing scan");
 
     struct ble_gap_disc_params disc = {
         .passive           = 0,

@@ -12,20 +12,47 @@
 
 static const char *TAG = "ssh_term";
 
+// -- Embedded SSH private key (from keys/id_ed25519) --------------------------
+
+extern const uint8_t ssh_key_start[]     asm("_binary_id_ed25519_start");
+extern const uint8_t ssh_key_end[]       asm("_binary_id_ed25519_end");
+extern const uint8_t ssh_pubkey_start[]  asm("_binary_id_ed25519_pub_start");
+extern const uint8_t ssh_pubkey_end[]    asm("_binary_id_ed25519_pub_end");
+
 // -- Per-connection auth context ----------------------------------------------
 
 typedef struct {
     const char *pass;
     int         pass_len;
+    bool        pubkey_tried;
+    const byte *priv_key;       // OpenSSH binary blob for pubkey auth
+    word32      priv_key_sz;
+    const byte *pub_key;        // SSH public key blob
+    word32      pub_key_sz;
 } auth_ctx_t;
 
 static int userauth_cb(byte authType, WS_UserAuthData *authData, void *ctx)
 {
     auth_ctx_t *ac = (auth_ctx_t *)ctx;
-    if (authType == WOLFSSH_USERAUTH_PASSWORD) {
-        authData->sf.password.password   = (const byte *)ac->pass;
-        authData->sf.password.passwordSz = (word32)ac->pass_len;
+    if (authType == WOLFSSH_USERAUTH_PUBLICKEY) {
+        if (ac->pubkey_tried || ac->priv_key == NULL) {
+            return WOLFSSH_USERAUTH_INVALID_PUBLICKEY;
+        }
+        ac->pubkey_tried = true;
+        authData->sf.publicKey.publicKeyType   = (const byte *)"ssh-ed25519";
+        authData->sf.publicKey.publicKeyTypeSz = 11;
+        authData->sf.publicKey.privateKey      = ac->priv_key;
+        authData->sf.publicKey.privateKeySz    = ac->priv_key_sz;
+        authData->sf.publicKey.publicKey       = ac->pub_key;
+        authData->sf.publicKey.publicKeySz     = ac->pub_key_sz;
         return WOLFSSH_USERAUTH_SUCCESS;
+    }
+    if (authType == WOLFSSH_USERAUTH_PASSWORD) {
+        if (ac->pass_len > 0) {
+            authData->sf.password.password   = (const byte *)ac->pass;
+            authData->sf.password.passwordSz = (word32)ac->pass_len;
+            return WOLFSSH_USERAUTH_SUCCESS;
+        }
     }
     return WOLFSSH_USERAUTH_FAILURE;
 }
@@ -95,8 +122,13 @@ void ssh_term_connect(display_t *display, QueueHandle_t keys,
     term_init(&term);
 
     auth_ctx_t auth = {
-        .pass     = target->pass,
-        .pass_len = (int)strlen(target->pass),
+        .pass         = target->pass,
+        .pass_len     = (int)strlen(target->pass),
+        .pubkey_tried = false,
+        .priv_key     = NULL,
+        .priv_key_sz  = 0,
+        .pub_key      = NULL,
+        .pub_key_sz   = 0,
     };
 
     WOLFSSH_CTX *ctx = wolfSSH_CTX_new(WOLFSSH_ENDPOINT_CLIENT, NULL);
@@ -105,6 +137,48 @@ void ssh_term_connect(display_t *display, QueueHandle_t keys,
         return;
     }
     wolfSSH_SetUserAuth(ctx, userauth_cb);
+
+    // Parse the embedded OpenSSH private key
+    word32 keySz = (word32)(ssh_key_end - ssh_key_start);
+    byte *parsedKey = NULL;
+    word32 parsedKeySz = 0;
+    const byte *keyType = NULL;
+    word32 keyTypeSz = 0;
+    int keyRet = wolfSSH_ReadKey_buffer(ssh_key_start, keySz,
+                                        WOLFSSH_FORMAT_OPENSSH,
+                                        &parsedKey, &parsedKeySz,
+                                        &keyType, &keyTypeSz, NULL);
+    if (keyRet == WS_SUCCESS) {
+        // Load into context for KEX host key algo negotiation
+        wolfSSH_CTX_UsePrivateKey_buffer(ctx, ssh_key_start, keySz,
+                                         WOLFSSH_FORMAT_OPENSSH);
+        // Pass raw OpenSSH blob for signing in auth callback
+        auth.priv_key    = parsedKey;
+        auth.priv_key_sz = parsedKeySz;
+        ESP_LOGI(TAG, "Ed25519 private key parsed (%lu bytes)",
+                 (unsigned long)parsedKeySz);
+    } else {
+        ESP_LOGW(TAG, "Failed to parse private key: %d", keyRet);
+    }
+
+    // Parse the embedded SSH public key (for auth request wire format)
+    word32 pubSz = (word32)(ssh_pubkey_end - ssh_pubkey_start);
+    byte *parsedPub = NULL;
+    word32 parsedPubSz = 0;
+    const byte *pubType = NULL;
+    word32 pubTypeSz = 0;
+    keyRet = wolfSSH_ReadKey_buffer(ssh_pubkey_start, pubSz,
+                                    WOLFSSH_FORMAT_SSH,
+                                    &parsedPub, &parsedPubSz,
+                                    &pubType, &pubTypeSz, NULL);
+    if (keyRet == WS_SUCCESS) {
+        auth.pub_key    = parsedPub;
+        auth.pub_key_sz = parsedPubSz;
+        ESP_LOGI(TAG, "Ed25519 public key parsed (%lu bytes)",
+                 (unsigned long)parsedPubSz);
+    } else {
+        ESP_LOGW(TAG, "Failed to parse public key: %d", keyRet);
+    }
 
     // Retry loop: TCP connect + SSH handshake (Esc to cancel)
     WOLFSSH *ssh = NULL;
@@ -214,6 +288,8 @@ void ssh_term_connect(display_t *display, QueueHandle_t keys,
 
 cleanup:
     wolfSSH_CTX_free(ctx);
+    if (parsedKey) free(parsedKey);
+    if (parsedPub) free(parsedPub);
 
     display_clear(display);
     display_puts(display, 0, 0, "disconnected");

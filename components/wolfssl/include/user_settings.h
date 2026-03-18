@@ -472,6 +472,9 @@
 
     /* ED25519 requires SHA512 */
     #define HAVE_ED25519
+    #define WOLFSSL_ED25519_STREAMING_VERIFY
+    #define HAVE_ED25519_KEY_IMPORT
+    #define HAVE_ED25519_KEY_EXPORT
 #endif
 
 #if defined(CONFIG_IDF_TARGET_ESP8266) || defined(CONFIG_IDF_TARGET_ESP32C2)
@@ -489,6 +492,9 @@
         #define HAVE_ECC
         #define HAVE_CURVE25519
         #define HAVE_ED25519
+        #define WOLFSSL_ED25519_STREAMING_VERIFY
+        #define HAVE_ED25519_KEY_IMPORT
+        #define HAVE_ED25519_KEY_EXPORT
         #define WOLFSSL_SHA512
         /*
         #define HAVE_ECC384

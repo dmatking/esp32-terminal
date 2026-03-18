@@ -46,6 +46,7 @@
 #include <wolfssl/wolfcrypt/rsa.h>
 #include <wolfssl/wolfcrypt/ecc.h>
 #include <wolfssl/wolfcrypt/hmac.h>
+#include <wolfssl/wolfcrypt/coding.h>
 #include <wolfssl/wolfcrypt/signature.h>
 
 #if (LIBWOLFSSL_VERSION_HEX >= WOLFSSL_V5_0_0) \
@@ -2143,6 +2144,25 @@ int wolfSSH_ProcessBuffer(WOLFSSH_CTX* ctx,
         derSz = (word32)ret;
     }
     #endif /* WOLFSSH_CERTS */
+    else if (format == WOLFSSH_FORMAT_OPENSSH) {
+        /* Base64-decode the OpenSSH private key */
+        const char* beginTag = "-----BEGIN OPENSSH PRIVATE KEY-----";
+        const char* endTag = "-----END OPENSSH PRIVATE KEY-----";
+        word32 beginLen = (word32)WSTRLEN(beginTag);
+        word32 endLen = (word32)WSTRLEN(endTag);
+        const byte* b64 = in + beginLen;
+        word32 b64Sz = inSz - beginLen - endLen - 2;
+
+        der = (byte*)WMALLOC(inSz, heap, dynamicType);
+        if (der == NULL)
+            return WS_MEMORY_E;
+        derSz = inSz;
+        ret = Base64_Decode((byte*)b64, b64Sz, der, &derSz);
+        if (ret != 0) {
+            WFREE(der, heap, dynamicType);
+            return WS_PARSE_E;
+        }
+    }
     else {
         return WS_UNIMPLEMENTED_E;
     }
@@ -2150,7 +2170,12 @@ int wolfSSH_ProcessBuffer(WOLFSSH_CTX* ctx,
     /* Maybe decrypt */
 
     if (type == BUFTYPE_PRIVKEY) {
-        ret = IdentifyAsn1Key(der, derSz, 1, ctx->heap);
+        if (format == WOLFSSH_FORMAT_OPENSSH) {
+            ret = IdentifyOpenSshKey(der, derSz, ctx->heap);
+        }
+        else {
+            ret = IdentifyAsn1Key(der, derSz, 1, ctx->heap);
+        }
         if (ret < 0) {
             WFREE(der, heap, dynamicType);
             return ret;

@@ -7,6 +7,7 @@ typedef struct {
     int width, height;   // pixels
     int cols, rows;      // character grid
     int char_w, char_h;  // pixels per character cell
+    int margin_x, margin_y; // pixel inset from display edges
 } display_geom_t;
 
 typedef struct display_t display_t;

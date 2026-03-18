@@ -269,3 +269,4 @@ sdkconfig
 managed_components/
 dependencies.lock
 slave_fw/*.bin
+keys/

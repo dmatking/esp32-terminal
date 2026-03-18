@@ -8,4 +8,6 @@ idf_component_register(
                   bt esp_hid wolfssl wolfssh esp_lcd esp_psram
                   esp_mm espressif__esp_hosted bootloader_support
                   esp_app_format esp_partition
+    EMBED_TXTFILES "${PROJECT_DIR}/keys/id_ed25519"
+                   "${PROJECT_DIR}/keys/id_ed25519.pub"
 )

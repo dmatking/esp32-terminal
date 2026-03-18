@@ -2,10 +2,10 @@ menu "Terminal P4"
 
 config TERM_COLS
     int "Terminal columns"
-    default 85
+    default 83
 
 config TERM_ROWS
     int "Terminal rows"
-    default 37
+    default 36
 
 endmenu

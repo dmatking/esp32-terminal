@@ -680,10 +680,10 @@ esp_hidh_gattc_event_handler(struct ble_gap_event *event, void *arg)
             MODLOG_DFLT(ERROR, "Error: Connection failed; status=%d\n",
                         event->connect.status);
             if (dev != NULL) {
-                dev->status = event->connect.status; // ESP_GATT_CONN_FAIL_ESTABLISH;
+                dev->status = event->connect.status;
                 dev->ble.conn_id = -1;
-                SEND_CB(); // return from connection
             }
+            SEND_CB(); // always unblock the caller on failure
         }
         return 0;
 
@@ -967,6 +967,7 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(uint8_t *bda, uint8_t address_type)
     memcpy(dev->addr.bda, bda, sizeof(dev->addr.bda));
     dev->ble.address_type = address_type;
     dev->ble.appearance = ESP_HID_APPEARANCE_GENERIC;
+    dev->ble.conn_id = -1;  // mark as not connected
 
     memcpy(addr.val, bda, sizeof(addr.val));
     addr.type = address_type;
@@ -992,7 +993,7 @@ esp_hidh_dev_t *esp_ble_hidh_dev_open(uint8_t *bda, uint8_t address_type)
         .min_ce_len = 0,
         .max_ce_len = 0,
     };
-    ret = ble_gap_connect(own_addr_type, &addr, 30000, &conn_params, esp_hidh_gattc_event_handler, NULL);
+    ret = ble_gap_connect(own_addr_type, &addr, 10000, &conn_params, esp_hidh_gattc_event_handler, NULL);
     if (ret) {
         esp_hidh_dev_free_inner(dev);
         ESP_LOGE(TAG, "esp_ble_gattc_open failed: %d", ret);
@@ -1071,7 +1072,7 @@ esp_hidh_dev_t *esp_ble_hidh_dev_reconnect(esp_hidh_dev_t *dev)
         .min_ce_len = 0,
         .max_ce_len = 0,
     };
-    ret = ble_gap_connect(own_addr_type, &addr, 30000, &conn_params,
+    ret = ble_gap_connect(own_addr_type, &addr, 5000, &conn_params,
                           esp_hidh_gattc_event_handler, NULL);
     if (ret) {
         ESP_LOGE(TAG, "reconnect: ble_gap_connect failed: %d", ret);

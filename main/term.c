@@ -179,8 +179,8 @@ void term_render(const term_t *t, display_t *display)
     }
 
     // Underline cursor
-    int cx = t->cursor_col * display->geom.char_w;
-    int cy = t->cursor_row * display->geom.char_h + display->geom.char_h - 1;
+    int cx = display->geom.margin_x + t->cursor_col * display->geom.char_w;
+    int cy = display->geom.margin_y + t->cursor_row * display->geom.char_h + display->geom.char_h - 1;
     for (int px = 0; px < display->geom.char_w - 1; px++)
         display_pixel(display, cx + px, cy, true);
 
