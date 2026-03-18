@@ -1,0 +1,36 @@
+description: wolfSSL wolfSSH Library
+discussion: https://www.wolfssl.com/forums
+documentation: https://www.wolfssl.com/documentation/manuals/wolfssh/index.html
+files:
+  exclude:
+  - '**/*'
+  - INSTALL.md
+  - '*.py'
+  - '**/*.list'
+  - '**/.vs/**/*'
+  - '**/build/**/*'
+  - '**/dist/**/*'
+  - '**/dist.bak/**/*'
+  - '**/out/**/*'
+  - '*.sh'
+  - '*.bak'
+  - sdkconfig
+  - README_DIST.md
+  - README_REGISTRY_PREPEND.md
+  - README_STAGING_PREPEND.md
+  - README_STAGING.md
+  include:
+  - ./README.md
+  - ./LICENSE.txt
+  - ./idf_component.yml
+  - ./CMakeLists.txt
+  - ./Kconfig
+  - ./install_log.txt
+  - ./src/**/*
+  - ./include/**/*
+  - ./wolfssh/**/*
+  - ./examples/**/*
+issues: https://github.com/wolfSSL/wolfssh/issues
+repository: https://github.com/wolfSSL/wolfssh.git
+url: https://www.wolfssl.com/
+version: 1.4.20

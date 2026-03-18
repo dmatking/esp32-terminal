@@ -1,0 +1,11 @@
+menu "Terminal P4"
+
+config TERM_COLS
+    int "Terminal columns"
+    default 85
+
+config TERM_ROWS
+    int "Terminal rows"
+    default 37
+
+endmenu

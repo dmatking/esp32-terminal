@@ -264,3 +264,8 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+# ESP-IDF
+sdkconfig
+managed_components/
+dependencies.lock
+slave_fw/*.bin

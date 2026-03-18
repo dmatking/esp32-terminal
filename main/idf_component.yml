@@ -1,0 +1,9 @@
+## IDF Component Manager Manifest File
+dependencies:
+  idf: ">=5.4.0"
+  esp_lcd_ek79007: "^1.0.0"
+  espressif/esp_hosted:
+    version: "^2.0.0"
+  espressif/esp_wifi_remote:
+    version: "*"
+  ## wolfssl and wolfssh are in components/ (local)
