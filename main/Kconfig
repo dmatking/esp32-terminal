@@ -6,6 +6,6 @@ config TERM_COLS
 
 config TERM_ROWS
     int "Terminal rows"
-    default 36
+    default 24
 
 endmenu

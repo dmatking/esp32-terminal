@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.c" "font5x7.c" "wifi_time.c"
+    SRCS "main.c" "wifi_time.c"
          "term.c" "ssh_term.c" "ssh_targets.c" "menu.c"
          "bt_kbd.c" "esp_hid_gap.c"
          "display_mipi_dsi.c" "slave_ota.c"

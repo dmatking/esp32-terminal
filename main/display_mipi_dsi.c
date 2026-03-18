@@ -1,5 +1,5 @@
 #include "display.h"
-#include "font5x7.h"
+#include "font_terminus24.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_lcd_panel_ops.h"
@@ -39,11 +39,11 @@ static const char *TAG = "mipi_dsi";
 #define MARGIN_X  10
 #define MARGIN_Y  10
 
-// Character cell: 2x scaled 5x7 font = 10x14, plus 2px gap = 12x16
+// Terminus 24 Bold: 12x24 native, no scaling needed
 #define CHAR_W  12
-#define CHAR_H  16
+#define CHAR_H  24
 #define COLS    ((DSI_H_RES - 2 * MARGIN_X) / CHAR_W)   // 83
-#define ROWS    ((DSI_V_RES - 2 * MARGIN_Y) / CHAR_H)   // 36
+#define ROWS    ((DSI_V_RES - 2 * MARGIN_Y) / CHAR_H)   // 24
 
 // RGB888 bytes per pixel
 #define BPP     3
@@ -59,32 +59,20 @@ static const char *TAG = "mipi_dsi";
 static void render_char(uint8_t *fb, int px, int py, char c)
 {
     if (c < 32 || c > 126) c = ' ';
-    const uint8_t *glyph = font5x7[c - 32];
+    const uint8_t (*glyph)[2] = terminus_24_data[c - 32];
 
-    // Clear the entire cell first
     for (int y = 0; y < CHAR_H; y++) {
         uint8_t *row = fb + ((py + y) * DSI_H_RES + px) * BPP;
-        memset(row, 0, CHAR_W * BPP);
-    }
-
-    if (c == ' ') return;
-
-    // Draw 2x scaled glyph
-    for (int fx = 0; fx < 5; fx++) {
-        uint8_t col_data = glyph[fx];
-        for (int fy = 0; fy < 7; fy++) {
-            if (col_data & (1 << fy)) {
-                // 2x2 pixel block
-                for (int dy = 0; dy < 2; dy++) {
-                    for (int dx = 0; dx < 2; dx++) {
-                        int x = px + fx * 2 + dx;
-                        int y = py + fy * 2 + dy;
-                        uint8_t *p = fb + (y * DSI_H_RES + x) * BPP;
-                        p[0] = FG_B;
-                        p[1] = FG_G;
-                        p[2] = FG_R;
-                    }
-                }
+        uint16_t bits = ((uint16_t)glyph[y][0] << 8) | glyph[y][1];
+        for (int x = 0; x < CHAR_W; x++) {
+            if (bits & (0x8000 >> x)) {
+                row[x * BPP + 0] = FG_B;
+                row[x * BPP + 1] = FG_G;
+                row[x * BPP + 2] = FG_R;
+            } else {
+                row[x * BPP + 0] = 0;
+                row[x * BPP + 1] = 0;
+                row[x * BPP + 2] = 0;
             }
         }
     }
