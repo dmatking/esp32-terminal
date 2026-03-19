@@ -4,11 +4,14 @@
 #include "nvs_flash.h"
 #include "display.h"
 #include "wifi_time.h"
-#include "bt_kbd.h"
 #include "ssh_term.h"
 #include "menu.h"
 #include "esp_hosted.h"
 #include "slave_ota.h"
+
+#if CONFIG_BT_ENABLED
+#include "bt_kbd.h"
+#endif
 
 static const char *TAG = "main";
 
@@ -21,23 +24,6 @@ void app_main(void)
 
     // Show splash screen during boot
     display_show_splash(&display);
-
-#if CONFIG_BOARD_P4_WAVESHARE
-    // TODO: esp_hosted crashes on this board — need to investigate C6 firmware
-    // For now, display test only
-    vTaskDelay(pdMS_TO_TICKS(2000));
-    display_clear(&display);
-    display_puts(&display, 0, 0,                          "Blokyo Terminal");
-    display_puts(&display, 0, display.geom.char_h,        "Waveshare 720x720");
-    {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%dx%d grid", display.geom.cols, display.geom.rows);
-        display_puts(&display, 0, 2 * display.geom.char_h, buf);
-    }
-    display_puts(&display, 0, 4 * display.geom.char_h,    "C6 hosted not yet configured");
-    display_flush(&display);
-    while (1) vTaskDelay(pdMS_TO_TICKS(1000));
-#endif
 
     // TODO: find correct boot button GPIO on P4 board (GPIO 0 floats low)
     bool force_repair = false;
@@ -54,13 +40,27 @@ void app_main(void)
     // WiFi + NTP (also inits NVS, netif, event loop)
     wifi_time_sync();
 
+    QueueHandle_t keys = NULL;
+
+#if CONFIG_BT_ENABLED
     // BLE keyboard (NimBLE HID Host)
-    QueueHandle_t keys = bt_kbd_init(&display, force_repair);
+    keys = bt_kbd_init(&display, force_repair);
     ESP_LOGI(TAG, "BT keyboard init done");
 
     // Wait for keyboard to actually connect before starting SSH
     bt_kbd_wait_connected();
     ESP_LOGI(TAG, "Keyboard connected");
+#else
+    // No BT — create a key queue for future use (e.g. touch input)
+    keys = xQueueCreate(64, sizeof(char));
+    ESP_LOGW(TAG, "BT disabled — no keyboard input");
+
+    display_clear(&display);
+    display_puts(&display, 0, 0,                          "WiFi connected");
+    display_puts(&display, 0, display.geom.char_h,        "BT disabled (C6 FW too old)");
+    display_puts(&display, 0, 3 * display.geom.char_h,    "SSH needs keyboard input");
+    display_flush(&display);
+#endif
 
     // Init wolfSSH once
     ssh_term_init();
