@@ -186,6 +186,22 @@ static const display_ops_t mipi_dsi_ops = {
     dsi_clear, dsi_flush, dsi_pixel, dsi_putc, dsi_puts, dsi_putc_color
 };
 
+// -- Splash screen ------------------------------------------------------------
+
+extern const uint8_t splash_start[] asm("_binary_splash_bgr888_bin_start");
+extern const uint8_t splash_end[]   asm("_binary_splash_bgr888_bin_end");
+
+void display_show_splash(display_t *d)
+{
+    mipi_dsi_priv_t *priv = d->priv;
+    size_t sz = splash_end - splash_start;
+    if (sz > FB_SIZE) sz = FB_SIZE;
+    memcpy(priv->framebuf, splash_start, sz);
+    esp_cache_msync(priv->framebuf, FB_SIZE, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    esp_lcd_panel_draw_bitmap(priv->panel, 0, 0, DSI_H_RES, DSI_V_RES,
+                              priv->framebuf);
+}
+
 // -- Public init --------------------------------------------------------------
 
 esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv)

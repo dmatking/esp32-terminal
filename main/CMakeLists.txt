@@ -10,4 +10,5 @@ idf_component_register(
                   esp_app_format esp_partition libvterm
     EMBED_TXTFILES "${PROJECT_DIR}/keys/id_ed25519"
                    "${PROJECT_DIR}/keys/id_ed25519.pub"
+    EMBED_FILES "splash_bgr888.bin"
 )
