@@ -5,16 +5,24 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_mipi_dsi.h"
-#include "esp_lcd_ek79007.h"
 #include "esp_ldo_regulator.h"
 #include "esp_cache.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include <string.h>
 
+#if CONFIG_BOARD_P4_EV
+#include "esp_lcd_ek79007.h"
+#elif CONFIG_BOARD_P4_WAVESHARE
+#include "esp_lcd_st7703.h"
+#endif
+
 static const char *TAG = "mipi_dsi";
 
-// Panel timing for EK79007 1024x600 @ 60Hz (matches factory BSP)
+// -- Board-specific panel parameters ------------------------------------------
+
+#if CONFIG_BOARD_P4_EV
+// EK79007 1024x600 @ 60Hz
 #define DSI_H_RES       1024
 #define DSI_V_RES       600
 #define DSI_HSYNC       10
@@ -26,12 +34,29 @@ static const char *TAG = "mipi_dsi";
 #define DSI_DPI_CLK_MHZ 52
 #define DSI_LANE_NUM    2
 #define DSI_LANE_MBPS   1000
+#define DSI_BK_LIGHT_ON 1
 
-// LDO for MIPI PHY (VDD_MIPI_DPHY = 2.5V on LDO_VO3)
+#elif CONFIG_BOARD_P4_WAVESHARE
+// ST7703 720x720 @ 60Hz
+#define DSI_H_RES       720
+#define DSI_V_RES       720
+#define DSI_HSYNC       20
+#define DSI_HBP         50
+#define DSI_HFP         50
+#define DSI_VSYNC       4
+#define DSI_VBP         20
+#define DSI_VFP         20
+#define DSI_DPI_CLK_MHZ 38
+#define DSI_LANE_NUM    2
+#define DSI_LANE_MBPS   480
+#define DSI_BK_LIGHT_ON 0   // active low
+#endif
+
+// LDO for MIPI PHY (VDD_MIPI_DPHY = 2.5V on LDO_VO3) — same on both boards
 #define DSI_PHY_LDO_CHAN    3
 #define DSI_PHY_LDO_MV     2500
 
-// Board GPIOs
+// Board GPIOs — same on both boards
 #define DSI_BK_LIGHT_GPIO   26
 #define DSI_RST_GPIO        27
 
@@ -42,8 +67,8 @@ static const char *TAG = "mipi_dsi";
 // Terminus 24 Bold: 12x24 native, no scaling needed
 #define CHAR_W  12
 #define CHAR_H  24
-#define COLS    ((DSI_H_RES - 2 * MARGIN_X) / CHAR_W)   // 83
-#define ROWS    ((DSI_V_RES - 2 * MARGIN_Y) / CHAR_H)   // 24
+#define COLS    ((DSI_H_RES - 2 * MARGIN_X) / CHAR_W)
+#define ROWS    ((DSI_V_RES - 2 * MARGIN_Y) / CHAR_H)
 
 // RGB888 bytes per pixel
 #define BPP     3
@@ -236,12 +261,12 @@ esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv)
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_dbi(dsi_bus, &dbi_cfg, &dbi_io));
 
-    // 4. Create DPI (data) panel
+    // 4. Create DPI (data) panel config
     esp_lcd_dpi_panel_config_t dpi_cfg = {
         .virtual_channel = 0,
         .dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT,
         .dpi_clock_freq_mhz = DSI_DPI_CLK_MHZ,
-        .in_color_format = LCD_COLOR_FMT_RGB888,
+        .num_fbs = 1,
         .video_timing = {
             .h_size = DSI_H_RES,
             .v_size = DSI_V_RES,
@@ -254,8 +279,12 @@ esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv)
         },
     };
 
-    // 5. Init EK79007 panel driver
+    // 5. Init panel driver (board-specific)
     esp_lcd_panel_handle_t panel = NULL;
+
+#if CONFIG_BOARD_P4_EV
+    dpi_cfg.pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB888;
+
     ek79007_vendor_config_t vendor_cfg = {
         .mipi_config = {
             .dsi_bus = dsi_bus,
@@ -273,6 +302,32 @@ esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv)
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
     // Display On (0x29) via DBI command interface
     esp_lcd_panel_io_tx_param(dbi_io, 0x29, NULL, 0);
+
+#elif CONFIG_BOARD_P4_WAVESHARE
+    dpi_cfg.pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB888;
+    dpi_cfg.flags.use_dma2d = true;
+
+    st7703_vendor_config_t vendor_cfg = {
+        .flags = {
+            .use_mipi_interface = 1,
+        },
+        .mipi_config = {
+            .dsi_bus = dsi_bus,
+            .dpi_config = &dpi_cfg,
+        },
+    };
+    esp_lcd_panel_dev_config_t dev_cfg = {
+        .reset_gpio_num = DSI_RST_GPIO,
+        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
+        .bits_per_pixel = 24,
+        .vendor_config = &vendor_cfg,
+    };
+    ESP_ERROR_CHECK(esp_lcd_new_panel_st7703(dbi_io, &dev_cfg, &panel));
+    ESP_ERROR_CHECK(esp_lcd_panel_reset(panel));
+    ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
+    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
+#endif
+
     ESP_LOGI(TAG, "Panel reset and initialized");
 
     // 6. Turn on backlight
@@ -281,8 +336,8 @@ esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv)
         .pin_bit_mask = 1ULL << DSI_BK_LIGHT_GPIO,
     };
     ESP_ERROR_CHECK(gpio_config(&bk_gpio_cfg));
-    gpio_set_level(DSI_BK_LIGHT_GPIO, 1);
-    ESP_LOGI(TAG, "Backlight on (GPIO %d)", DSI_BK_LIGHT_GPIO);
+    gpio_set_level(DSI_BK_LIGHT_GPIO, DSI_BK_LIGHT_ON);
+    ESP_LOGI(TAG, "Backlight on (GPIO %d, level %d)", DSI_BK_LIGHT_GPIO, DSI_BK_LIGHT_ON);
 
     // 7. Get the panel's own framebuffer (allocated internally by DPI driver)
     //    Writing directly into this buffer avoids a memcpy - hardware scans from it.
@@ -303,6 +358,7 @@ esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv)
     dsi_clear(d);
     dsi_flush(d);
 
-    ESP_LOGI(TAG, "MIPI-DSI 1024x600 init done (%dx%d terminal)", COLS, ROWS);
+    ESP_LOGI(TAG, "MIPI-DSI %dx%d init done (%dx%d terminal)",
+             DSI_H_RES, DSI_V_RES, COLS, ROWS);
     return ESP_OK;
 }

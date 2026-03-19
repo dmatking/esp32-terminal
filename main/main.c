@@ -22,6 +22,23 @@ void app_main(void)
     // Show splash screen during boot
     display_show_splash(&display);
 
+#if CONFIG_BOARD_P4_WAVESHARE
+    // TODO: esp_hosted crashes on this board — need to investigate C6 firmware
+    // For now, display test only
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    display_clear(&display);
+    display_puts(&display, 0, 0,                          "Blokyo Terminal");
+    display_puts(&display, 0, display.geom.char_h,        "Waveshare 720x720");
+    {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%dx%d grid", display.geom.cols, display.geom.rows);
+        display_puts(&display, 0, 2 * display.geom.char_h, buf);
+    }
+    display_puts(&display, 0, 4 * display.geom.char_h,    "C6 hosted not yet configured");
+    display_flush(&display);
+    while (1) vTaskDelay(pdMS_TO_TICKS(1000));
+#endif
+
     // TODO: find correct boot button GPIO on P4 board (GPIO 0 floats low)
     bool force_repair = false;
 

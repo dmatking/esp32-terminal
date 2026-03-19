@@ -1,11 +1,27 @@
 menu "Terminal P4"
 
+choice BOARD
+    prompt "Target board"
+    default BOARD_P4_EV
+    help
+        Select the ESP32-P4 board variant.
+
+config BOARD_P4_EV
+    bool "ESP32-P4 Function EV Board (1024x600 EK79007)"
+
+config BOARD_P4_WAVESHARE
+    bool "Waveshare ESP32-P4-WIFI6-Touch-LCD-4B (720x720 ST7703)"
+
+endchoice
+
 config TERM_COLS
     int "Terminal columns"
-    default 83
+    default 83 if BOARD_P4_EV
+    default 58 if BOARD_P4_WAVESHARE
 
 config TERM_ROWS
     int "Terminal rows"
-    default 24
+    default 24 if BOARD_P4_EV
+    default 29 if BOARD_P4_WAVESHARE
 
 endmenu
