@@ -25,8 +25,7 @@ void app_main(void)
     // Show splash screen during boot
     display_show_splash(&display);
 
-    // TODO: find correct boot button GPIO on P4 board (GPIO 0 floats low)
-    bool force_repair = false;
+    bool force_repair = false;  // BOOT long-press is now handled in bt_kbd scan task
 
     // Connect to ESP32-C6 co-processor via SDIO (provides WiFi + BLE)
     ESP_LOGI(TAG, "Connecting to co-processor...");

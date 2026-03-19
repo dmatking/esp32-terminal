@@ -15,8 +15,11 @@
 #include "host/util/util.h"
 #include "esp_private/esp_hidh_private.h"
 #include "esp_system.h"
+#include "driver/gpio.h"
 #include <stdio.h>
 #include <string.h>
+
+#define BOOT_BUTTON_GPIO  35  // ESP32-P4 strapping pin (low = download mode at reset)
 
 // No public header for ble_store_config_init -- declared as extern per NimBLE convention
 extern void ble_store_config_init(void);
@@ -374,8 +377,8 @@ static bool try_bonded_reconnect(bool show_on_display)
         display_puts(s_display, 0, 0 * s_display->geom.char_h, "reconnecting...");
         display_puts(s_display, 0, 1 * s_display->geom.char_h, "press any key on");
         display_puts(s_display, 0, 2 * s_display->geom.char_h, "keyboard to connect");
-        display_puts(s_display, 0, 4 * s_display->geom.char_h, "hold BOOT on reset");
-        display_puts(s_display, 0, 5 * s_display->geom.char_h, "to re-pair");
+        display_puts(s_display, 0, 4 * s_display->geom.char_h, "hold BOOT 2s to");
+        display_puts(s_display, 0, 5 * s_display->geom.char_h, "re-pair new keyboard");
         display_flush(s_display);
     }
 
@@ -446,12 +449,20 @@ static void scan_task(void *arg)
         display_flush(s_display);
     }
 #else
-    // If boot button was held at startup, bonds were already cleared in bt_kbd_init
+    // Configure BOOT button GPIO for reading
+    gpio_config_t boot_cfg = {
+        .pin_bit_mask = 1ULL << BOOT_BUTTON_GPIO,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    };
+    gpio_config(&boot_cfg);
+
     bool force_repair = s_force_repair;
 
-    // Retry bonded reconnect until it works (or force re-pair)
+    // Try bonded reconnect (skip if no bonds exist)
     if (!force_repair) {
-        for (int attempt = 1; ; attempt++) {
+        for (int attempt = 1; attempt <= 8; attempt++) {
             ESP_LOGI(TAG, "Bonded reconnect attempt %d", attempt);
             if (try_bonded_reconnect(attempt == 1)) {
                 xTaskCreate(connection_watchdog_task, "bt_watch", 16384, NULL, 2, NULL);
@@ -459,6 +470,25 @@ static void scan_task(void *arg)
                 return;
             }
             ble_gap_conn_cancel();
+            // If no bonded peers exist, skip straight to fresh pairing
+            int bond_count;
+            ble_store_util_count(BLE_STORE_OBJ_TYPE_OUR_SEC, &bond_count);
+            if (bond_count == 0) {
+                ESP_LOGI(TAG, "No bonds found, starting fresh pairing scan");
+                break;
+            }
+            // Check for BOOT button long-press (2s) to force re-pair
+            int held_ms = 0;
+            while (gpio_get_level(BOOT_BUTTON_GPIO) == 0 && held_ms < 2000) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+                held_ms += 100;
+            }
+            if (held_ms >= 2000) {
+                ESP_LOGW(TAG, "BOOT held 2s — clearing bonds, forcing re-pair");
+                ble_store_clear();
+                force_repair = true;
+                break;
+            }
             ESP_LOGW(TAG, "Bonded reconnect attempt %d failed, retrying...", attempt);
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
