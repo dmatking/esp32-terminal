@@ -6,6 +6,24 @@ if(CONFIG_BT_ENABLED)
     list(APPEND SRCS "bt_kbd.c" "esp_hid_gap.c")
 endif()
 
+# Generate splash image at configure time based on board selection
+if(CONFIG_BOARD_P4_WAVESHARE)
+    set(SPLASH_PNG "${PROJECT_DIR}/assets/blokyo-logo-720x720.png")
+else()
+    set(SPLASH_PNG "${PROJECT_DIR}/assets/blokyo-logo-1024x600.png")
+endif()
+set(SPLASH_BIN "${CMAKE_CURRENT_LIST_DIR}/splash_bgr888.bin")
+
+if(SPLASH_PNG)
+    execute_process(
+        COMMAND python3 "${PROJECT_DIR}/assets/gen_splash.py" "${SPLASH_PNG}" "${SPLASH_BIN}"
+        RESULT_VARIABLE SPLASH_RC
+    )
+    if(NOT SPLASH_RC EQUAL 0)
+        message(WARNING "Failed to generate splash (rc=${SPLASH_RC}), using existing")
+    endif()
+endif()
+
 idf_component_register(
     SRCS ${SRCS}
     INCLUDE_DIRS "."
