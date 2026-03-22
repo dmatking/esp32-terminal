@@ -1,5 +1,4 @@
 #include "wifi_time.h"
-#include "wifi_creds.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
@@ -53,8 +52,8 @@ void wifi_time_sync(void)
 
     wifi_config_t wifi_cfg = {
         .sta = {
-            .ssid      = WIFI_SSID,
-            .password  = WIFI_PASS,
+            .ssid      = CONFIG_WIFI_SSID,
+            .password  = CONFIG_WIFI_PASS,
             .threshold = { .authmode = WIFI_AUTH_WPA2_PSK },
             .pmf_cfg   = { .capable = true, .required = false },
         },
@@ -63,14 +62,14 @@ void wifi_time_sync(void)
     esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg);
     esp_wifi_start();
 
-    ESP_LOGI(TAG, "Connecting to %s...", WIFI_SSID);
+    ESP_LOGI(TAG, "Connecting to %s...", CONFIG_WIFI_SSID);
 
     // Wait up to 30s for initial connection
     EventBits_t bits = xEventGroupWaitBits(s_events,
         CONNECTED_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(30000));
 
     if (bits & CONNECTED_BIT) {
-        setenv("TZ", WIFI_TZ, 1);
+        setenv("TZ", CONFIG_WIFI_TZ, 1);
         tzset();
 
         // Start SNTP -- stays running, auto-resyncs every hour

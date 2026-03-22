@@ -24,4 +24,16 @@ config TERM_ROWS
     default 24 if BOARD_P4_EV
     default 29 if BOARD_P4_WAVESHARE
 
+config WIFI_SSID
+    string "WiFi SSID"
+    default ""
+
+config WIFI_PASS
+    string "WiFi Password"
+    default ""
+
+config WIFI_TZ
+    string "Timezone (POSIX TZ string)"
+    default "CST6CDT,M3.2.0,M11.1.0"
+
 endmenu

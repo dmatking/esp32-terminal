@@ -274,3 +274,10 @@ keys/
 
 # Generated at build time from assets/
 main/splash_bgr888.bin
+
+# Claude launch scripts
+claude*.sh
+
+# Screenshots / media
+*.jpg
+*.png
