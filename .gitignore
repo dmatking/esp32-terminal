@@ -278,6 +278,11 @@ main/splash_bgr888.bin
 # Claude launch scripts
 claude*.sh
 
+# Private notes
+CASE_STUDY.md
+docs/mcp-ideas.md
+docs/
+
 # Screenshots / media
 *.jpg
 *.png
