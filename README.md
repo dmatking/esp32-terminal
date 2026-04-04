@@ -2,6 +2,8 @@
 
 SSH terminal on ESP32-P4 with BLE keyboard, MIPI-DSI display, and ESP32-C6 co-processor (WiFi + BT via esp_hosted).
 
+> For chip-level notes on the P4+C6 combination (esp_hosted init, SDIO, PSRAM, errata, etc.) see [esp32-notes](https://github.com/dmatking/esp32-notes).
+
 ## Supported Boards
 
 | Board | Display | Resolution | Terminal Grid |
