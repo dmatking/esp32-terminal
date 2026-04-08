@@ -6,8 +6,8 @@ SSH terminal on ESP32-P4 with BLE keyboard, MIPI-DSI display, and ESP32-C6 co-pr
 
 ## Screenshots
 
-| Menu | Terminal |
-|------|----------|
+| Waveshare Menu | Waveshare Terminal |
+|----------------|---------------------|
 | <img src="assets/menu.jpg" width="100%"> | <img src="assets/exa.jpg" width="100%"> |
 
 ## Supported Boards
