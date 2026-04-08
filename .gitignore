@@ -286,3 +286,4 @@ docs/
 # Screenshots / media
 *.jpg
 *.png
+!assets/**
