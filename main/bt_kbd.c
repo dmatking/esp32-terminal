@@ -180,9 +180,10 @@ static void connection_watchdog_task(void *arg)
                     ESP_LOGI(TAG, "Reconnected successfully");
                     break;
                 }
-                ble_gap_conn_cancel();
+                // ble_gap_connect already timed out internally — do NOT call
+                // ble_gap_conn_cancel() here, it would confuse NimBLE state.
                 ESP_LOGW(TAG, "Reconnect attempt %d failed, retrying...", attempt);
-                vTaskDelay(pdMS_TO_TICKS(1000));
+                vTaskDelay(pdMS_TO_TICKS(3000));
             }
         } else {
             // Fallback: full bonded reconnect (first boot, no device yet)
@@ -460,37 +461,49 @@ static void scan_task(void *arg)
 
     bool force_repair = s_force_repair;
 
-    // Try bonded reconnect (skip if no bonds exist)
+    // Try bonded reconnect; retry indefinitely until BOOT held 2s or no bonds
     if (!force_repair) {
-        for (int attempt = 1; attempt <= 8; attempt++) {
-            ESP_LOGI(TAG, "Bonded reconnect attempt %d", attempt);
-            if (try_bonded_reconnect(attempt == 1)) {
-                xTaskCreate(connection_watchdog_task, "bt_watch", 16384, NULL, 2, NULL);
-                vTaskDelete(NULL);
-                return;
-            }
-            ble_gap_conn_cancel();
+        bool first = true;
+        while (1) {
             // If no bonded peers exist, skip straight to fresh pairing
-            int bond_count;
+            int bond_count = 0;
             ble_store_util_count(BLE_STORE_OBJ_TYPE_OUR_SEC, &bond_count);
             if (bond_count == 0) {
                 ESP_LOGI(TAG, "No bonds found, starting fresh pairing scan");
                 break;
             }
-            // Check for BOOT button long-press (2s) to force re-pair
-            int held_ms = 0;
-            while (gpio_get_level(BOOT_BUTTON_GPIO) == 0 && held_ms < 2000) {
-                vTaskDelay(pdMS_TO_TICKS(100));
-                held_ms += 100;
+
+            ESP_LOGI(TAG, "Bonded reconnect attempt...");
+            if (try_bonded_reconnect(first)) {
+                xTaskCreate(connection_watchdog_task, "bt_watch", 16384, NULL, 2, NULL);
+                vTaskDelete(NULL);
+                return;
             }
-            if (held_ms >= 2000) {
+            first = false;
+
+            // Poll BOOT button across the full inter-attempt window (3s).
+            // Holding it for 2 consecutive seconds at any point clears bonds.
+            ESP_LOGW(TAG, "Bonded reconnect failed — hold BOOT 2s to re-pair");
+            bool boot_triggered = false;
+            int held_ms = 0;
+            for (int elapsed = 0; elapsed < 3000; elapsed += 100) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+                if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
+                    held_ms += 100;
+                    if (held_ms >= 2000) {
+                        boot_triggered = true;
+                        break;
+                    }
+                } else {
+                    held_ms = 0;  // reset on release
+                }
+            }
+            if (boot_triggered) {
                 ESP_LOGW(TAG, "BOOT held 2s — clearing bonds, forcing re-pair");
                 ble_store_clear();
                 force_repair = true;
                 break;
             }
-            ESP_LOGW(TAG, "Bonded reconnect attempt %d failed, retrying...", attempt);
-            vTaskDelay(pdMS_TO_TICKS(1000));
         }
     }
 

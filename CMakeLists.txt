@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.16)
 add_compile_definitions(WOLFSSL_USER_SETTINGS)
 
 # Pull in machine-local credentials (WiFi, etc.) without committing them
+set(SDKCONFIG_DEFAULTS "sdkconfig.defaults")
 if(EXISTS "$ENV{HOME}/.esp_creds")
     list(APPEND SDKCONFIG_DEFAULTS "$ENV{HOME}/.esp_creds")
 endif()
