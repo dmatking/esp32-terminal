@@ -481,21 +481,29 @@ static void scan_task(void *arg)
             }
             first = false;
 
-            // Check for BOOT button long-press (2s) to force re-pair
+            // Poll BOOT button across the full inter-attempt window (3s).
+            // Holding it for 2 consecutive seconds at any point clears bonds.
+            ESP_LOGW(TAG, "Bonded reconnect failed — hold BOOT 2s to re-pair");
+            bool boot_triggered = false;
             int held_ms = 0;
-            while (gpio_get_level(BOOT_BUTTON_GPIO) == 0 && held_ms < 2000) {
+            for (int elapsed = 0; elapsed < 3000; elapsed += 100) {
                 vTaskDelay(pdMS_TO_TICKS(100));
-                held_ms += 100;
+                if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
+                    held_ms += 100;
+                    if (held_ms >= 2000) {
+                        boot_triggered = true;
+                        break;
+                    }
+                } else {
+                    held_ms = 0;  // reset on release
+                }
             }
-            if (held_ms >= 2000) {
+            if (boot_triggered) {
                 ESP_LOGW(TAG, "BOOT held 2s — clearing bonds, forcing re-pair");
                 ble_store_clear();
                 force_repair = true;
                 break;
             }
-
-            ESP_LOGW(TAG, "Bonded reconnect failed, retrying in 3s...");
-            vTaskDelay(pdMS_TO_TICKS(3000));
         }
     }
 
