@@ -53,6 +53,9 @@
     && ((defined(HAVE_FIPS) && FIPS_VERSION_GE(5,2)) \
         || defined(WOLFSSH_NO_ECDH_NISTP256_KYBER_LEVEL1_SHA256))
     #include <wolfssl/wolfcrypt/kdf.h>
+#elif defined(WOLFSSL_WOLFSSH)
+    /* wc_SSH_KDF is declared in kdf.h under WOLFSSL_WOLFSSH */
+    #include <wolfssl/wolfcrypt/kdf.h>
 #endif
 
 #ifdef WOLFSSL_HAVE_KYBER

@@ -661,6 +661,7 @@ esp_hidh_gattc_event_handler(struct ble_gap_event *event, void *arg)
             }
             if (!dev) {
                 ESP_LOGE(TAG, "Connect received for unknown device");
+                SEND_CB(); // unblock WAIT_CB in reconnect path
                 return 0;
             }
             dev->status = -1; // set to not found and clear if HID service is found
@@ -1061,6 +1062,9 @@ esp_hidh_dev_t *esp_ble_hidh_dev_reconnect(esp_hidh_dev_t *dev)
 
     memcpy(addr.val, dev->addr.bda, sizeof(addr.val));
     addr.type = dev->ble.address_type;
+    // Bonded peers may use RPA; the _ID suffix tells NimBLE to use the IRK
+    if (addr.type == BLE_ADDR_PUBLIC)       addr.type = BLE_ADDR_PUBLIC_ID;
+    else if (addr.type == BLE_ADDR_RANDOM)  addr.type = BLE_ADDR_RANDOM_ID;
 
     struct ble_gap_conn_params conn_params = {
         .scan_itvl = 0x0010,
