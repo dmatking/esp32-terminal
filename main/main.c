@@ -21,6 +21,7 @@ void app_main(void)
     static mipi_dsi_priv_t hw_dsi;
 
     ESP_ERROR_CHECK(display_mipi_dsi_init(&display, &hw_dsi));
+    display_show_splash(&display);
 
     bool force_repair = false;  // BOOT long-press is now handled in bt_kbd scan task
 

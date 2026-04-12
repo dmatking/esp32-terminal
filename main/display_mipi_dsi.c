@@ -211,6 +211,72 @@ static const display_ops_t mipi_dsi_ops = {
     dsi_clear, dsi_flush, dsi_pixel, dsi_putc, dsi_puts, dsi_putc_color
 };
 
+// -- Splash screen ------------------------------------------------------------
+
+// Render a string into the framebuffer at pixel (px, py) scaled up by `scale`.
+static void render_string_scaled(uint8_t *fb, int px, int py,
+                                  const char *s, int scale,
+                                  rgb_t fg, rgb_t bg)
+{
+    for (; *s; s++) {
+        char c = *s;
+        if (c < 32 || c > 126) c = ' ';
+        const uint8_t (*glyph)[2] = terminus_24_data[c - 32];
+
+        for (int gy = 0; gy < CHAR_H; gy++) {
+            uint16_t bits = ((uint16_t)glyph[gy][0] << 8) | glyph[gy][1];
+            for (int sy = 0; sy < scale; sy++) {
+                int row_y = py + gy * scale + sy;
+                if (row_y < 0 || row_y >= DSI_V_RES) continue;
+                uint8_t *row = fb + row_y * DSI_H_RES * BPP;
+                for (int gx = 0; gx < CHAR_W; gx++) {
+                    bool on = (bits & (0x8000 >> gx)) != 0;
+                    uint8_t b = on ? fg.b : bg.b;
+                    uint8_t g = on ? fg.g : bg.g;
+                    uint8_t r = on ? fg.r : bg.r;
+                    for (int sx = 0; sx < scale; sx++) {
+                        int col_x = px + gx * scale + sx;
+                        if (col_x < 0 || col_x >= DSI_H_RES) continue;
+                        row[col_x * BPP + 0] = b;
+                        row[col_x * BPP + 1] = g;
+                        row[col_x * BPP + 2] = r;
+                    }
+                }
+            }
+        }
+        px += CHAR_W * scale;
+    }
+}
+
+void display_show_splash(display_t *d)
+{
+    mipi_dsi_priv_t *priv = d->priv;
+    uint8_t *fb = priv->framebuf;
+
+    memset(fb, 0, FB_SIZE);
+
+    const rgb_t fg = DEFAULT_FG;
+    const rgb_t bg = DEFAULT_BG;
+    const int scale = 4;                    // 48x96 px per character cell
+    const int cw = CHAR_W * scale;
+    const int ch = CHAR_H * scale;
+    const int gap = 20;
+
+    const char *line1 = "ESP32";
+    const char *line2 = "Terminal";
+    int total_h = 2 * ch + gap;
+    int y1 = (DSI_V_RES - total_h) / 2;
+    int y2 = y1 + ch + gap;
+    int x1 = (DSI_H_RES - (int)strlen(line1) * cw) / 2;
+    int x2 = (DSI_H_RES - (int)strlen(line2) * cw) / 2;
+
+    render_string_scaled(fb, x1, y1, line1, scale, fg, bg);
+    render_string_scaled(fb, x2, y2, line2, scale, fg, bg);
+
+    esp_cache_msync(fb, FB_SIZE, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    esp_lcd_panel_draw_bitmap(priv->panel, 0, 0, DSI_H_RES, DSI_V_RES, fb);
+}
+
 // -- Public init --------------------------------------------------------------
 
 esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv)

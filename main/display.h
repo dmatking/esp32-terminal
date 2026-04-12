@@ -55,3 +55,4 @@ typedef struct {
 } mipi_dsi_priv_t;
 
 esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv);
+void display_show_splash(display_t *d);
