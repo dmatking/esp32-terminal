@@ -307,47 +307,61 @@ static int collect_scan_cb(struct ble_gap_event *event, void *arg)
 static void draw_device_list(display_t *d, int cursor, int count,
                               bt_scan_dev_t *devs)
 {
-    const int scale = 2;
-    const int cw  = d->geom.char_w * scale;   // 24px per col
-    const int ch  = d->geom.char_h * scale;   // 48px per row
-    const int mx  = d->geom.margin_x;         // 10
-    const int my  = d->geom.margin_y;         // 10
-    const int cols = (d->geom.width - 2 * mx) / cw;  // ~29
-    const rgb_t fg = {0x00, 0xFF, 0x00};      // phosphor green
+    const int scale  = 2;
+    const int cw     = d->geom.char_w * scale;           // 24px
+    const int ch     = d->geom.char_h * scale;           // 48px
+    const int mx     = d->geom.margin_x;                 // 10
+    const int my     = d->geom.margin_y;                 // 10
+    const int cols   = (d->geom.width  - 2 * mx) / cw;  // ~29
+    const int rows2  = (d->geom.height - 2 * my) / ch;  // ~14
+    const int cols1  = (d->geom.width  - 2 * mx) / d->geom.char_w;  // ~58
+    const rgb_t fg   = {0x00, 0xFF, 0x00};
 
-    display_fb_clear(d);
+    // No fb_clear — we overwrite every pixel in-place to avoid a black flash.
+    // Every row is rendered as a full-width padded string so no stale pixels remain.
+
+    char line[64];
 
     // Row 0: header
-    display_text_scaled(d, mx, my, "BT Keyboard Setup", scale, fg);
+    snprintf(line, sizeof(line), "%-*.*s", cols, cols, "BT Keyboard Setup");
+    display_text_scaled(d, mx, my + 0 * ch, line, scale, fg);
 
     // Row 1: separator
-    char sep[32];
-    int sep_len = cols < 31 ? cols : 30;
-    memset(sep, '-', sep_len);
-    sep[sep_len] = '\0';
-    display_text_scaled(d, mx, my + ch, sep, scale, fg);
+    {
+        char sep[32];
+        int n = cols < (int)sizeof(sep) - 1 ? cols : (int)sizeof(sep) - 1;
+        memset(sep, '-', n);
+        sep[n] = '\0';
+        snprintf(line, sizeof(line), "%-*.*s", cols, cols, sep);
+    }
+    display_text_scaled(d, mx, my + 1 * ch, line, scale, fg);
 
-    // Device rows (row 2+)
-    char line[32];
-    for (int i = 0; i < count; i++) {
-        char rssi_str[12];
-        snprintf(rssi_str, sizeof(rssi_str), "%d dB", devs[i].rssi);
-        int rlen   = (int)strlen(rssi_str);
-        int name_w = cols - 2 - 1 - rlen;  // prefix + space + rssi
-        snprintf(line, sizeof(line), "%c %-*.*s %s",
-                 (i == cursor) ? '>' : ' ',
-                 name_w, name_w, devs[i].name, rssi_str);
-        display_text_scaled(d, mx, my + (i + 2) * ch, line, scale, fg);
+    // Rows 2+: devices (or "Scanning..." if empty)
+    for (int r = 2; r < rows2; r++) {
+        int i = r - 2;
+        if (i < count) {
+            char rssi_str[12];
+            snprintf(rssi_str, sizeof(rssi_str), "%d dB", devs[i].rssi);
+            int rlen   = (int)strlen(rssi_str);
+            int name_w = cols - 2 - 1 - rlen;
+            snprintf(line, sizeof(line), "%c %-*.*s %s",
+                     (i == cursor) ? '>' : ' ',
+                     name_w, name_w, devs[i].name, rssi_str);
+        } else if (i == 0 && count == 0) {
+            snprintf(line, sizeof(line), "%-*.*s", cols, cols, "Scanning...");
+        } else {
+            snprintf(line, sizeof(line), "%-*.*s", cols, cols, "");
+        }
+        display_text_scaled(d, mx, my + r * ch, line, scale, fg);
     }
 
-    if (count == 0)
-        display_text_scaled(d, mx, my + 4 * ch, "Scanning...", scale, fg);
-
-    // Footer at bottom (1× scale so both lines fit)
+    // Footer: last two rows at 1× (padded to 1× cols width to erase old content)
     int fy2 = d->geom.height - my - d->geom.char_h;
     int fy1 = fy2 - d->geom.char_h - 4;
-    display_text_scaled(d, mx, fy1, "Tap device to connect", 1, fg);
-    display_text_scaled(d, mx, fy2, "BOOT: next  |  Hold 1s: connect", 1, fg);
+    snprintf(line, sizeof(line), "%-*.*s", cols1, cols1, "Tap device to connect");
+    display_text_scaled(d, mx, fy1, line, 1, fg);
+    snprintf(line, sizeof(line), "%-*.*s", cols1, cols1, "BOOT: next  |  Hold 1s: connect");
+    display_text_scaled(d, mx, fy2, line, 1, fg);
 
     display_fb_commit(d);
 }
