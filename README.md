@@ -1,4 +1,4 @@
-# terminal_p4
+# esp32-terminal
 
 SSH terminal on ESP32-P4 with BLE keyboard, MIPI-DSI display, and ESP32-C6 co-processor (WiFi + BT via esp_hosted).
 
