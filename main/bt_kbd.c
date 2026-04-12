@@ -370,7 +370,7 @@ restart_scan:
 
     int cursor   = 0;
     int held_ms  = 0;
-    TickType_t scan_start  = xTaskGetTickCount();
+    TickType_t scan_start  = xTaskGetTickCount();  // used for no-device timeout
     TickType_t last_redraw = 0;
 
     while (1) {
@@ -412,16 +412,6 @@ restart_scan:
                     cursor = (cursor + 1) % cnt;
             }
             held_ms = 0;
-        }
-
-        // --- Auto-connect if only one device after 8s ---
-        {
-            xSemaphoreTake(s_scan_mutex, portMAX_DELAY);
-            int cnt = s_scan_dev_count;
-            xSemaphoreGive(s_scan_mutex);
-            uint32_t elapsed_ms = pdTICKS_TO_MS(now - scan_start);
-            if (cnt == 1 && elapsed_ms > 8000 && tapped_dev == -1)
-                tapped_dev = 0;
         }
 
         // --- Handle selection with 1.5s countdown ---
