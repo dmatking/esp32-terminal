@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "display.h"
+#include "touch.h"
 #include "wifi_time.h"
 #include "ssh_term.h"
 #include "menu.h"
@@ -22,6 +23,7 @@ void app_main(void)
 
     ESP_ERROR_CHECK(display_mipi_dsi_init(&display, &hw_dsi));
     display_show_splash(&display);
+    touch_init();  // GT911 on I2C_NUM_0 (GPIO 7/8); non-fatal if panel absent
 
     bool force_repair = false;  // BOOT long-press is now handled in bt_kbd scan task
 

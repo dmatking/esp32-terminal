@@ -1,6 +1,6 @@
 set(SRCS "main.c" "wifi_time.c"
          "term.c" "ssh_term.c" "ssh_targets.c" "menu.c"
-         "display_mipi_dsi.c" "slave_ota.c")
+         "display_mipi_dsi.c" "slave_ota.c" "touch.c")
 
 if(CONFIG_BT_ENABLED)
     list(APPEND SRCS "bt_kbd.c" "esp_hid_gap.c")

@@ -277,6 +277,77 @@ void display_show_splash(display_t *d)
     esp_lcd_panel_draw_bitmap(priv->panel, 0, 0, DSI_H_RES, DSI_V_RES, fb);
 }
 
+// Render two lines of text centered on screen at 2× scale (for status screens).
+void display_show_status(display_t *d, const char *line1, const char *line2)
+{
+    mipi_dsi_priv_t *priv = d->priv;
+    uint8_t *fb = priv->framebuf;
+
+    memset(fb, 0, FB_SIZE);
+
+    const rgb_t fg = DEFAULT_FG;
+    const rgb_t bg = DEFAULT_BG;
+    const int scale = 2;
+    const int cw = CHAR_W * scale;
+    const int ch = CHAR_H * scale;
+    const int gap = 16;
+
+    int total_h = 2 * ch + gap;
+    int y1 = (DSI_V_RES - total_h) / 2;
+    int y2 = y1 + ch + gap;
+    int x1 = (DSI_H_RES - (int)strlen(line1) * cw) / 2;
+    int x2 = (DSI_H_RES - (int)strlen(line2) * cw) / 2;
+
+    render_string_scaled(fb, x1, y1, line1, scale, fg, bg);
+    render_string_scaled(fb, x2, y2, line2, scale, fg, bg);
+
+    esp_cache_msync(fb, FB_SIZE, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    esp_lcd_panel_draw_bitmap(priv->panel, 0, 0, DSI_H_RES, DSI_V_RES, fb);
+}
+
+// Show a BLE passkey: "Pairing Code" at 2×, digits spaced at 4×, instruction at 1×.
+void display_show_passkey(display_t *d, uint32_t key)
+{
+    mipi_dsi_priv_t *priv = d->priv;
+    uint8_t *fb = priv->framebuf;
+
+    memset(fb, 0, FB_SIZE);
+
+    const rgb_t fg = DEFAULT_FG;
+    const rgb_t bg = DEFAULT_BG;
+
+    // Compute vertical layout
+    const int ch2 = CHAR_H * 2;
+    const int ch4 = CHAR_H * 4;
+    const int gap = 16;
+    int total_h = ch2 + gap + ch4 + gap + CHAR_H;
+    int y_title = (DSI_V_RES - total_h) / 2;
+    int y_code  = y_title + ch2 + gap;
+    int y_instr = y_code  + ch4 + gap;
+
+    // Line 1: "Pairing Code" at 2×
+    const char *title = "Pairing Code";
+    int x_title = (DSI_H_RES - (int)strlen(title) * CHAR_W * 2) / 2;
+    render_string_scaled(fb, x_title, y_title, title, 2, fg, bg);
+
+    // Line 2: spaced digits at 4× — "N N N N N N"
+    char digits[8];
+    snprintf(digits, sizeof(digits), "%06lu", (unsigned long)key);
+    char spaced[16];
+    snprintf(spaced, sizeof(spaced), "%c %c %c %c %c %c",
+             digits[0], digits[1], digits[2], digits[3], digits[4], digits[5]);
+    int x_code = (DSI_H_RES - (int)strlen(spaced) * CHAR_W * 4) / 2;
+    render_string_scaled(fb, x_code, y_code, spaced, 4, fg, bg);
+
+    // Line 3: instruction at 1×
+    const char *instr = "Type on keyboard + Enter";
+    int x_instr = (DSI_H_RES - (int)strlen(instr) * CHAR_W) / 2;
+    render_string_scaled(fb, x_instr, y_instr, instr, 1, fg, bg);
+
+    esp_cache_msync(fb, FB_SIZE, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    esp_lcd_panel_draw_bitmap(priv->panel, 0, 0, DSI_H_RES, DSI_V_RES, fb);
+}
+
 // -- Public init --------------------------------------------------------------
 
 esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv)

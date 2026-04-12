@@ -56,3 +56,5 @@ typedef struct {
 
 esp_err_t display_mipi_dsi_init(display_t *d, mipi_dsi_priv_t *priv);
 void display_show_splash(display_t *d);
+void display_show_status(display_t *d, const char *line1, const char *line2);
+void display_show_passkey(display_t *d, uint32_t key);
