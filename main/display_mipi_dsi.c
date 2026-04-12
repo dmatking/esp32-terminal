@@ -277,6 +277,30 @@ void display_show_splash(display_t *d)
     esp_lcd_panel_draw_bitmap(priv->panel, 0, 0, DSI_H_RES, DSI_V_RES, fb);
 }
 
+// -- Framebuffer primitives for callers that bypass the cell grid --------------
+
+void display_fb_clear(display_t *d)
+{
+    mipi_dsi_priv_t *priv = d->priv;
+    memset(priv->framebuf, 0, FB_SIZE);
+}
+
+// Render text at pixel (px, py) at arbitrary scale into the raw framebuffer.
+void display_text_scaled(display_t *d, int px, int py,
+                         const char *s, int scale, rgb_t fg)
+{
+    mipi_dsi_priv_t *priv = d->priv;
+    render_string_scaled(priv->framebuf, px, py, s, scale, fg, DEFAULT_BG);
+}
+
+// Push framebuffer to panel (cache sync + draw_bitmap).
+void display_fb_commit(display_t *d)
+{
+    mipi_dsi_priv_t *priv = d->priv;
+    esp_cache_msync(priv->framebuf, FB_SIZE, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    esp_lcd_panel_draw_bitmap(priv->panel, 0, 0, DSI_H_RES, DSI_V_RES, priv->framebuf);
+}
+
 // Render two lines of text centered on screen at 2× scale (for status screens).
 void display_show_status(display_t *d, const char *line1, const char *line2)
 {

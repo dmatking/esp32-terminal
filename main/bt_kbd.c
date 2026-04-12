@@ -307,42 +307,49 @@ static int collect_scan_cb(struct ble_gap_event *event, void *arg)
 static void draw_device_list(display_t *d, int cursor, int count,
                               bt_scan_dev_t *devs)
 {
-    const int char_h = d->geom.char_h;
-    const int cols   = d->geom.cols;
-    const int rows   = d->geom.rows;
+    const int scale = 2;
+    const int cw  = d->geom.char_w * scale;   // 24px per col
+    const int ch  = d->geom.char_h * scale;   // 48px per row
+    const int mx  = d->geom.margin_x;         // 10
+    const int my  = d->geom.margin_y;         // 10
+    const int cols = (d->geom.width - 2 * mx) / cw;  // ~29
+    const rgb_t fg = {0x00, 0xFF, 0x00};      // phosphor green
 
-    display_clear(d);
+    display_fb_clear(d);
 
-    display_puts(d, 0, 0, "Bluetooth Keyboard Setup");
+    // Row 0: header
+    display_text_scaled(d, mx, my, "BT Keyboard Setup", scale, fg);
 
-    // Separator line
-    char sep[64];
-    int sep_len = cols < 63 ? cols : 63;
+    // Row 1: separator
+    char sep[32];
+    int sep_len = cols < 31 ? cols : 30;
     memset(sep, '-', sep_len);
     sep[sep_len] = '\0';
-    display_puts(d, 0, 1 * char_h, sep);
+    display_text_scaled(d, mx, my + ch, sep, scale, fg);
 
-    // Device rows start at row 2
-    char line[64];
+    // Device rows (row 2+)
+    char line[32];
     for (int i = 0; i < count; i++) {
-        char rssi_str[16];
+        char rssi_str[12];
         snprintf(rssi_str, sizeof(rssi_str), "%d dB", devs[i].rssi);
-        int rssi_len = (int)strlen(rssi_str);
-        int name_w   = cols - rssi_len - 4;  // 2 prefix + 2 gap
-
-        snprintf(line, sizeof(line), "%c %-*.*s  %s",
+        int rlen   = (int)strlen(rssi_str);
+        int name_w = cols - 2 - 1 - rlen;  // prefix + space + rssi
+        snprintf(line, sizeof(line), "%c %-*.*s %s",
                  (i == cursor) ? '>' : ' ',
                  name_w, name_w, devs[i].name, rssi_str);
-        display_puts(d, 0, (i + 2) * char_h, line);
+        display_text_scaled(d, mx, my + (i + 2) * ch, line, scale, fg);
     }
 
     if (count == 0)
-        display_puts(d, 0, 4 * char_h, "Scanning...");
+        display_text_scaled(d, mx, my + 4 * ch, "Scanning...", scale, fg);
 
-    display_puts(d, 0, (rows - 2) * char_h, "Tap a device to connect");
-    display_puts(d, 0, (rows - 1) * char_h, "BOOT: next  |  Hold 1s: connect");
+    // Footer at bottom (1× scale so both lines fit)
+    int fy2 = d->geom.height - my - d->geom.char_h;
+    int fy1 = fy2 - d->geom.char_h - 4;
+    display_text_scaled(d, mx, fy1, "Tap device to connect", 1, fg);
+    display_text_scaled(d, mx, fy2, "BOOT: next  |  Hold 1s: connect", 1, fg);
 
-    display_flush(d);
+    display_fb_commit(d);
 }
 
 // Run the pairing UI. Blocks until the user selects a device.
@@ -377,11 +384,13 @@ restart_scan:
         TickType_t now = xTaskGetTickCount();
 
         // --- Touch input ---
+        // Device rows are at 2× scale: row i starts at margin_y + (i+2)*ch
+        // where ch = char_h * 2. Solve for i: i = (ty - margin_y)/ch - 2
         uint16_t tx, ty;
         int tapped_dev = -1;
         if (touch_poll_tap(&tx, &ty)) {
-            int row = (ty - d->geom.margin_y) / d->geom.char_h;
-            int idx = row - 2;
+            int ch2 = d->geom.char_h * 2;
+            int idx = (ty - d->geom.margin_y) / ch2 - 2;
             xSemaphoreTake(s_scan_mutex, portMAX_DELAY);
             int cnt = s_scan_dev_count;
             xSemaphoreGive(s_scan_mutex);
