@@ -501,7 +501,7 @@ static bool try_bonded_reconnect(bool show_on_display)
              value.peer_addr.type);
 
     if (show_on_display && s_display)
-        display_show_status(s_display, "reconnecting...", "press any key on keyboard");
+        display_show_status(s_display, "reconnecting...", "Hold BOOT 2s to re-pair");
 
     uint8_t addr_type = value.peer_addr.type;
     if (addr_type == BLE_ADDR_PUBLIC)
@@ -511,7 +511,25 @@ static bool try_bonded_reconnect(bool show_on_display)
 
     xSemaphoreTake(s_open_done_sem, 0);
     esp_hidh_dev_open(value.peer_addr.val, ESP_HID_TRANSPORT_BLE, addr_type);
-    xSemaphoreTake(s_open_done_sem, pdMS_TO_TICKS(15000));
+
+    // Wait up to 15s for OPEN_EVENT, polling BOOT every 100ms for re-pair trigger
+    int held_ms = 0;
+    for (int waited = 0; waited < 15000; waited += 100) {
+        if (xSemaphoreTake(s_open_done_sem, pdMS_TO_TICKS(100)) == pdTRUE)
+            break;
+        if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
+            held_ms += 100;
+            if (held_ms >= 2000) {
+                ESP_LOGW(TAG, "BOOT held 2s during reconnect — forcing re-pair");
+                ble_gap_conn_cancel();
+                ble_store_clear();
+                s_force_repair = true;
+                return false;
+            }
+        } else {
+            held_ms = 0;
+        }
+    }
 
     if (xSemaphoreTake(s_connected_sem, 0) == pdTRUE) {
         xSemaphoreGive(s_connected_sem);
@@ -554,28 +572,31 @@ static void scan_task(void *arg)
                 }
                 first = false;
 
-                // Poll BOOT for 3s; hold 2s to force re-pair
-                ESP_LOGW(TAG, "Bonded reconnect failed — hold BOOT 2s to re-pair");
-                bool boot_triggered = false;
+                // try_bonded_reconnect sets s_force_repair if BOOT was held
+                if (s_force_repair) {
+                    force_repair = true;
+                    break;
+                }
+
+                // Otherwise wait 3s between attempts, still watching BOOT
+                ESP_LOGW(TAG, "Bonded reconnect failed, retrying in 3s (hold BOOT 2s to re-pair)");
                 int held_ms = 0;
                 for (int elapsed = 0; elapsed < 3000; elapsed += 100) {
                     vTaskDelay(pdMS_TO_TICKS(100));
                     if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
                         held_ms += 100;
                         if (held_ms >= 2000) {
-                            boot_triggered = true;
+                            ESP_LOGW(TAG, "BOOT held 2s — clearing bonds, forcing re-pair");
+                            ble_store_clear();
+                            force_repair = true;
+                            s_force_repair = true;
                             break;
                         }
                     } else {
                         held_ms = 0;
                     }
                 }
-                if (boot_triggered) {
-                    ESP_LOGW(TAG, "BOOT held 2s — clearing bonds, forcing re-pair");
-                    ble_store_clear();
-                    force_repair = true;
-                    break;
-                }
+                if (force_repair) break;
             }
         }
     }
