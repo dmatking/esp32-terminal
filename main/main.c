@@ -12,7 +12,7 @@
 #include "slave_ota.h"
 
 #if CONFIG_BT_ENABLED
-#include "bt_kbd.h"
+#include "bt_kbd_ui.h"
 #endif
 
 static const char *TAG = "main";
@@ -44,11 +44,11 @@ void app_main(void)
 
 #if CONFIG_BT_ENABLED
     // BLE keyboard (NimBLE HID Host)
-    keys = bt_kbd_init(&display, force_repair);
+    keys = bt_kbd_ui_init(&display, force_repair);
     ESP_LOGI(TAG, "BT keyboard init done");
 
     // Wait for keyboard to actually connect before starting SSH
-    bt_kbd_wait_connected();
+    bt_kbd_ui_wait_connected();
     ESP_LOGI(TAG, "Keyboard connected");
 #else
     // No BT — create a key queue for future use (e.g. touch input)

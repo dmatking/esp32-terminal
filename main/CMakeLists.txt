@@ -3,7 +3,7 @@ set(SRCS "main.c" "wifi_time.c"
          "display_mipi_dsi.c" "slave_ota.c" "touch.c")
 
 if(CONFIG_BT_ENABLED)
-    list(APPEND SRCS "bt_kbd.c" "esp_hid_gap.c")
+    list(APPEND SRCS "bt_kbd_ui.c")
 endif()
 
 idf_component_register(
@@ -13,7 +13,7 @@ idf_component_register(
                  esp_lcd esp_psram
                  esp_mm espressif__esp_hosted bootloader_support
                  esp_app_format esp_partition libvterm
-                 esp_lcd_st7703 bt esp_hid
+                 esp_lcd_st7703 bt esp-ble-kbd-host
     EMBED_TXTFILES "${PROJECT_DIR}/keys/id_ed25519"
                    "${PROJECT_DIR}/keys/id_ed25519.pub"
 )

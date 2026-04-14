@@ -9,3 +9,5 @@ dependencies:
   esp-wolfssh-client:
     path: /home/esp/hardware/esp-wolfssh-client
     ## wolfssl and wolfssh are now bundled inside esp-wolfssh-client
+  esp-ble-kbd-host:
+    path: /home/esp/hardware/esp-ble-kbd-host
