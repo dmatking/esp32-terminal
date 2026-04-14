@@ -5,7 +5,8 @@
 #include "display.h"
 #include "touch.h"
 #include "wifi_time.h"
-#include "ssh_term.h"
+#include "esp_wolfssh_client.h"
+#include <wolfssh/ssh.h>
 #include "menu.h"
 #include "esp_hosted.h"
 #include "slave_ota.h"
@@ -61,8 +62,8 @@ void app_main(void)
     display_flush(&display);
 #endif
 
-    // Init wolfSSH once
-    ssh_term_init();
+    // Init wolfSSH once (global; must be called before ssh_client_connect)
+    wolfSSH_Init();
 
     // Hand off to menu -- does not return
     menu_run(&display, keys);

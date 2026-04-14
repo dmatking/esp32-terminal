@@ -1,6 +1,7 @@
 #include "menu.h"
 #include "ssh_targets.h"
-#include "ssh_term.h"
+#include "esp_wolfssh_client.h"
+#include "term.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_system.h"
@@ -201,6 +202,76 @@ static bool confirm_delete(display_t *disp, QueueHandle_t keys,
     }
 }
 
+// -- SSH session wrapper ------------------------------------------------------
+
+// Embedded SSH key pair (compiled in from keys/id_ed25519*)
+extern const uint8_t ssh_key_start[]    asm("_binary_id_ed25519_start");
+extern const uint8_t ssh_key_end[]      asm("_binary_id_ed25519_end");
+extern const uint8_t ssh_pubkey_start[] asm("_binary_id_ed25519_pub_start");
+extern const uint8_t ssh_pubkey_end[]   asm("_binary_id_ed25519_pub_end");
+
+typedef struct {
+    display_t        *display;
+    term_t            term;
+    SemaphoreHandle_t done;
+} session_ctx_t;
+
+static void session_on_data(const uint8_t *data, size_t len, void *ctx)
+{
+    session_ctx_t *s = (session_ctx_t *)ctx;
+    term_feed(&s->term, data, (int)len);
+    term_render(&s->term, s->display);
+}
+
+static void session_on_disconnected(int reason, void *ctx)
+{
+    (void)reason;
+    session_ctx_t *s = (session_ctx_t *)ctx;
+    display_show_status(s->display, "disconnected", "");
+    xSemaphoreGive(s->done);
+}
+
+// Blocking: connects, forwards keys, returns on disconnect.
+static void run_ssh_session(display_t *display, QueueHandle_t keys,
+                             const ssh_target_t *target)
+{
+    static session_ctx_t ctx;
+    ctx.display = display;
+    ctx.done = xSemaphoreCreateBinary();
+    term_init(&ctx.term);
+
+    ssh_client_config_t cfg = {
+        .host            = target->host,
+        .port            = target->port,
+        .user            = target->user,
+        .privkey_pem     = ssh_key_start,
+        .privkey_pem_len = (size_t)(ssh_key_end - ssh_key_start),
+        .pubkey_pem      = ssh_pubkey_start,
+        .pubkey_pem_len  = (size_t)(ssh_pubkey_end - ssh_pubkey_start),
+        .password        = target->pass[0] ? target->pass : NULL,
+        .term_cols       = (uint16_t)display->geom.cols,
+        .term_rows       = (uint16_t)display->geom.rows,
+        .callbacks = {
+            .on_data         = session_on_data,
+            .on_disconnected = session_on_disconnected,
+            .ctx             = &ctx,
+        },
+    };
+    ssh_client_connect(&cfg);
+
+    // Forward keystrokes from the BLE keyboard queue to the SSH session.
+    char ch;
+    while (xSemaphoreTake(ctx.done, 0) != pdTRUE) {
+        if (xQueueReceive(keys, &ch, pdMS_TO_TICKS(100)) == pdTRUE) {
+            uint8_t b = (uint8_t)ch;
+            ssh_client_send(&b, 1);
+        }
+    }
+
+    vSemaphoreDelete(ctx.done);
+    ctx.done = NULL;
+}
+
 // -- Main menu loop -----------------------------------------------------------
 
 void menu_run(display_t *display, QueueHandle_t keys)
@@ -231,7 +302,7 @@ void menu_run(display_t *display, QueueHandle_t keys)
                          targets[cursor].name,
                          targets[cursor].host,
                          targets[cursor].port);
-                ssh_term_connect(display, keys, &targets[cursor]);
+                run_ssh_session(display, keys, &targets[cursor]);
                 // Returns here after disconnect
                 ESP_LOGI(TAG, "Disconnected, back to menu");
             }
