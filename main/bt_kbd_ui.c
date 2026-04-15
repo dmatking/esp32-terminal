@@ -55,7 +55,7 @@ static void draw_device_list(int cursor, int count,
     char line[64];
 
     // Header
-    snprintf(line, sizeof(line), "%-*.*s", cols, cols, "BT Keyboard Setup");
+    snprintf(line, sizeof(line), "%-*.*s", cols, cols, "Bluetooth Keyboard");
     display_text_scaled(d, mx, my + 0 * ch, line, scale, fg);
 
     // Separator
@@ -90,7 +90,7 @@ static void draw_device_list(int cursor, int count,
     // Footer
     int fy2 = d->geom.height - my - d->geom.char_h;
     int fy1 = fy2 - d->geom.char_h - 4;
-    snprintf(line, sizeof(line), "%-*.*s", cols1, cols1, "Tap device to connect");
+    snprintf(line, sizeof(line), "%-*.*s", cols1, cols1, "Tap to connect");
     display_text_scaled(d, mx, fy1, line, 1, fg);
     snprintf(line, sizeof(line), "%-*.*s", cols1, cols1,
              "BOOT: next  |  Hold 1s: connect  |  Hold 2s: re-pair");

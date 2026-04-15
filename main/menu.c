@@ -57,32 +57,63 @@ static char read_key(QueueHandle_t keys)
 static void draw_list(display_t *disp, ssh_target_t *targets, int count,
                       int cursor)
 {
-    display_clear(disp);
-    display_puts(disp, 0, 0, "-- SSH Targets --");
+    const int scale = 2;
+    const int cw    = disp->geom.char_w * scale;
+    const int ch    = disp->geom.char_h * scale;
+    const int mx    = disp->geom.margin_x;
+    const int my    = disp->geom.margin_y;
+    const int cols  = (disp->geom.width  - 2 * mx) / cw;
+    const int rows2 = (disp->geom.height - 2 * my) / ch;
+    const int cols1 = (disp->geom.width  - 2 * mx) / disp->geom.char_w;
+    const rgb_t fg  = {0x00, 0xFF, 0x00};
 
-    if (count == 0) {
-        display_puts(disp, 0, 2 * disp->geom.char_h, "(none)");
-    } else {
-        int max_visible = disp->geom.rows - 4;
-        int top = 0;
-        if (cursor >= max_visible)
-            top = cursor - max_visible + 1;
+    char line[128];
 
-        for (int i = 0; i < max_visible && (top + i) < count; i++) {
-            int idx = top + i;
-            char line[128];
-            snprintf(line, sizeof(line), "%c%-20s",
+    // Header
+    snprintf(line, sizeof(line), "%-*.*s", cols, cols, "SSH Targets");
+    display_text_scaled(disp, mx, my + 0 * ch, line, scale, fg);
+
+    // Separator
+    {
+        char sep[32];
+        int n = cols < (int)sizeof(sep) - 1 ? cols : (int)sizeof(sep) - 1;
+        memset(sep, '-', n);
+        sep[n] = '\0';
+        snprintf(line, sizeof(line), "%-*.*s", cols, cols, sep);
+    }
+    display_text_scaled(disp, mx, my + 1 * ch, line, scale, fg);
+
+    // Target rows (rows 2..rows2-3 reserved for list)
+    int list_rows = rows2 - 4;  // header(1) + sep(1) + footer(2) = 4
+    int top = 0;
+    if (count > 0 && cursor >= list_rows)
+        top = cursor - list_rows + 1;
+
+    for (int r = 0; r < list_rows; r++) {
+        int idx = top + r;
+        if (idx < count) {
+            snprintf(line, sizeof(line), "%c%-*.*s",
                      idx == cursor ? '>' : ' ',
+                     cols - 1, cols - 1,
                      targets[idx].name);
-            display_puts(disp, 0, (i + 1) * disp->geom.char_h, line);
+        } else if (r == 0 && count == 0) {
+            snprintf(line, sizeof(line), "%-*.*s", cols, cols, "(No targets)");
+        } else {
+            snprintf(line, sizeof(line), "%-*.*s", cols, cols, "");
         }
+        display_text_scaled(disp, mx, my + (2 + r) * ch, line, scale, fg);
     }
 
-    // Bottom help lines
-    display_puts(disp, 0, (disp->geom.rows - 3) * disp->geom.char_h, "a:add e:edit d:del");
-    display_puts(disp, 0, (disp->geom.rows - 2) * disp->geom.char_h, "enter:connect");
-    display_puts(disp, 0, (disp->geom.rows - 1) * disp->geom.char_h, "q:sleep");
-    display_flush(disp);
+    // Footer — 1× scale hint lines
+    int fy2 = disp->geom.height - my - disp->geom.char_h;
+    int fy1 = fy2 - disp->geom.char_h - 4;
+    snprintf(line, sizeof(line), "%-*.*s", cols1, cols1,
+             "A: Add  E: Edit  D: Del  Enter: Connect");
+    display_text_scaled(disp, mx, fy1, line, 1, fg);
+    snprintf(line, sizeof(line), "%-*.*s", cols1, cols1, "Q: Sleep");
+    display_text_scaled(disp, mx, fy2, line, 1, fg);
+
+    display_fb_commit(disp);
 }
 
 // -- Field editor -------------------------------------------------------------
@@ -227,7 +258,7 @@ static void session_on_disconnected(int reason, void *ctx)
 {
     (void)reason;
     session_ctx_t *s = (session_ctx_t *)ctx;
-    display_show_status(s->display, "disconnected", "");
+    display_show_status(s->display, "Disconnected", "");
     xSemaphoreGive(s->done);
 }
 
