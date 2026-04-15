@@ -11,6 +11,7 @@
 
 #include "bt_kbd_ui.h"
 #include "display.h"
+#include "touch.h"
 #include "esp_ble_kbd_host.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
@@ -148,6 +149,21 @@ static void boot_button_task(void *arg)
 
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(100));
+
+        // Touch: tap on a device row during scan selects that device
+        if (s_display && ble_kbd_host_get_state() == BLE_KBD_STATE_SCANNING) {
+            uint16_t tx, ty;
+            if (touch_poll_tap(&tx, &ty)) {
+                // Device rows rendered at 2× scale starting at row 2
+                int ch2 = s_display->geom.char_h * 2;
+                int idx = ((int)ty - s_display->geom.margin_y) / ch2 - 2;
+                int cnt = s_scan_count;
+                if (idx >= 0 && idx < cnt) {
+                    ESP_LOGI(TAG, "Tap: selecting device %d", idx);
+                    ble_kbd_host_select_device(idx);
+                }
+            }
+        }
 
         if (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
             held_ms += 100;
