@@ -18,6 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -31,7 +32,7 @@ static display_t     *s_display;
 // Cursor state for scan UI (owned here; shared between on_scan_updated + boot task)
 static volatile int   s_cursor;
 static volatile int   s_scan_count;
-static volatile bool  s_terminal_active;
+static atomic_bool    s_terminal_active;
 
 // ---------------------------------------------------------------------------
 // Scan device list rendering (moved from bt_kbd.c)
@@ -115,7 +116,7 @@ static void on_status(ble_kbd_state_t state,
 {
     ESP_LOGI(TAG, "kbd state %d: %s / %s", state, line1, line2);
     // Don't overwrite the terminal with BLE status overlays
-    if (s_display && !s_terminal_active)
+    if (s_display && !atomic_load(&s_terminal_active))
         display_show_status(s_display, line1, line2);
 }
 
@@ -239,5 +240,5 @@ void bt_kbd_ui_wait_connected(void)
 
 void bt_kbd_ui_set_terminal_active(bool active)
 {
-    s_terminal_active = active;
+    atomic_store(&s_terminal_active, active);
 }
