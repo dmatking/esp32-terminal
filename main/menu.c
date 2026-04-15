@@ -11,6 +11,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if CONFIG_BT_ENABLED
+#include "bt_kbd_ui.h"
+#endif
+
 static const char *TAG = "menu";
 
 // -- Key codes ----------------------------------------------------------------
@@ -333,7 +337,13 @@ void menu_run(display_t *display, QueueHandle_t keys)
                          targets[cursor].name,
                          targets[cursor].host,
                          targets[cursor].port);
+#if CONFIG_BT_ENABLED
+                bt_kbd_ui_set_terminal_active(true);
+#endif
                 run_ssh_session(display, keys, &targets[cursor]);
+#if CONFIG_BT_ENABLED
+                bt_kbd_ui_set_terminal_active(false);
+#endif
                 // Returns here after disconnect
                 ESP_LOGI(TAG, "Disconnected, back to menu");
             }

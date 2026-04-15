@@ -31,6 +31,7 @@ static display_t     *s_display;
 // Cursor state for scan UI (owned here; shared between on_scan_updated + boot task)
 static volatile int   s_cursor;
 static volatile int   s_scan_count;
+static volatile bool  s_terminal_active;
 
 // ---------------------------------------------------------------------------
 // Scan device list rendering (moved from bt_kbd.c)
@@ -113,7 +114,8 @@ static void on_status(ble_kbd_state_t state,
                       const char *line1, const char *line2, void *ctx)
 {
     ESP_LOGI(TAG, "kbd state %d: %s / %s", state, line1, line2);
-    if (s_display)
+    // Don't overwrite the terminal with BLE status overlays
+    if (s_display && !s_terminal_active)
         display_show_status(s_display, line1, line2);
 }
 
@@ -233,4 +235,9 @@ QueueHandle_t bt_kbd_ui_init(display_t *display, bool force_repair)
 void bt_kbd_ui_wait_connected(void)
 {
     ble_kbd_host_wait_connected();
+}
+
+void bt_kbd_ui_set_terminal_active(bool active)
+{
+    s_terminal_active = active;
 }
