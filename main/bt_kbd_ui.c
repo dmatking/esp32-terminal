@@ -182,7 +182,10 @@ static void boot_button_task(void *arg)
                         held_ms = 0;
                     }
                 }
-            } else {
+            } else if (state == BLE_KBD_STATE_RECONNECTING) {
+                // Only allow re-pair from the reconnecting screen.
+                // Allowing it from CONNECTED/CONNECTING would queue CMD_START_PAIRING
+                // which then fires unexpectedly on the next disconnect, clearing bonds.
                 if (held_ms >= 2000) {
                     ESP_LOGI(TAG, "BOOT 2s: forcing re-pair");
                     ble_kbd_host_start_pairing();

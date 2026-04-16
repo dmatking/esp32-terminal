@@ -6,8 +6,8 @@ dependencies:
     version: "^2.0.0"
   espressif/esp_wifi_remote:
     version: "*"
-  esp-wolfssh-client:
-    path: /home/esp/hardware/esp-wolfssh-client
-    ## wolfssl and wolfssh are now bundled inside esp-wolfssh-client
-  esp-ble-kbd-host:
-    path: /home/esp/hardware/esp-ble-kbd-host
+  esp32-wolfssh-client:
+    path: /home/esp/hardware/esp32-wolfssh-client
+    ## wolfssl and wolfssh are now bundled inside esp32-wolfssh-client
+  esp32-ble-kbd-host:
+    path: /home/esp/hardware/esp32-ble-kbd-host

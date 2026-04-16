@@ -13,7 +13,7 @@ idf_component_register(
                  esp_lcd esp_psram
                  esp_mm espressif__esp_hosted bootloader_support
                  esp_app_format esp_partition libvterm
-                 esp_lcd_st7703 bt esp-ble-kbd-host
+                 esp_lcd_st7703 bt esp32-ble-kbd-host
     EMBED_TXTFILES "${PROJECT_DIR}/keys/id_ed25519"
                    "${PROJECT_DIR}/keys/id_ed25519.pub"
 )
