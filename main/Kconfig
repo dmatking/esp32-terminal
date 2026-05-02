@@ -15,12 +15,12 @@ config BOARD_P4_WAVESHARE
 endchoice
 
 config TERM_COLS
-    int "Terminal columns"
+    int
     default 83 if BOARD_P4_EV
     default 58 if BOARD_P4_WAVESHARE
 
 config TERM_ROWS
-    int "Terminal rows"
+    int
     default 24 if BOARD_P4_EV
     default 29 if BOARD_P4_WAVESHARE
 

@@ -172,6 +172,8 @@ bool touch_poll_tap(uint16_t *x, uint16_t *y)
                 ? (uint16_t)((uint32_t)raw_y * DISP_H / s_y_res) : raw_y;
             if (px >= DISP_W) px = DISP_W - 1;
             if (py >= DISP_H) py = DISP_H - 1;
+            // GT911 Y axis is inverted relative to the display
+            py = (DISP_H - 1) - py;
 
             if (!s_touching) {
                 s_start_x = px;
